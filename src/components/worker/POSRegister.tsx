@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { CartItem, ClientMessage } from '@/shared/types';
+import { MENU_ITEMS } from '@/shared/constants';
 import { MenuGrid } from './MenuGrid';
 import { Cart } from './Cart';
+import { useTranslation } from '@/lib/i18n';
 
 interface POSRegisterProps {
   sendMessage: (msg: ClientMessage) => void;
@@ -11,17 +13,55 @@ interface POSRegisterProps {
   isPaymentPending: boolean;
 }
 
-export function POSRegister({ sendMessage, cartItems, workerBalance, currentCustomerName, isPaymentPending }: POSRegisterProps) {
-  
+export function POSRegister({
+  sendMessage,
+  cartItems: serverCartItems,
+  workerBalance,
+  currentCustomerName,
+  isPaymentPending,
+}: POSRegisterProps) {
+  const { t } = useTranslation();
+  const [localCart, setLocalCart] = useState<CartItem[]>(serverCartItems || []);
+
+  // Synchronize when server updates cart items
+  useEffect(() => {
+    if (serverCartItems) {
+      setLocalCart(serverCartItems);
+    }
+  }, [serverCartItems]);
+
   const handleAddItem = (menuItemId: string) => {
+    const item = MENU_ITEMS.find((m) => m.id === menuItemId);
+    if (item) {
+      setLocalCart((prev) => {
+        const existing = prev.find((c) => c.menuItem.id === item.id);
+        if (existing) {
+          return prev.map((c) =>
+            c.menuItem.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
+          );
+        }
+        return [...prev, { menuItem: item, quantity: 1 }];
+      });
+    }
     sendMessage({ type: 'add-to-cart', menuItemId });
   };
 
   const handleRemoveItem = (menuItemId: string) => {
+    setLocalCart((prev) => {
+      const idx = prev.findIndex((c) => c.menuItem.id === menuItemId);
+      if (idx === -1) return prev;
+      if (prev[idx].quantity > 1) {
+        return prev.map((c, i) =>
+          i === idx ? { ...c, quantity: c.quantity - 1 } : c
+        );
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
     sendMessage({ type: 'remove-from-cart', menuItemId });
   };
 
   const handleClearCart = () => {
+    setLocalCart([]);
     sendMessage({ type: 'clear-cart' });
   };
 
@@ -37,15 +77,17 @@ export function POSRegister({ sendMessage, cartItems, workerBalance, currentCust
           <h2 className="font-mono text-amber-glow font-bold text-lg tracking-widest">POS_TERM_01</h2>
           <div className="font-mono text-sm text-ash mt-1">
             {currentCustomerName ? (
-              <span className="text-bone">NOW SERVING: <span className="text-safe">{currentCustomerName.toUpperCase()}</span></span>
+              <span className="text-bone">
+                NOW SERVING: <span className="text-safe">{currentCustomerName.toUpperCase()}</span>
+              </span>
             ) : (
-              <span className="text-smoke">NO CUSTOMER AT COUNTER</span>
+              <span className="text-smoke">{t('waitingCustomer')}</span>
             )}
           </div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-ash text-xs">BANK BALANCE</div>
-          <div className="font-mono text-safe text-xl">${workerBalance.toFixed(2)}</div>
+          <div className="font-mono text-ash text-xs">{t('balance').toUpperCase()}</div>
+          <div className="font-mono text-safe text-xl font-bold">${workerBalance.toFixed(2)}</div>
         </div>
       </div>
 
@@ -56,7 +98,7 @@ export function POSRegister({ sendMessage, cartItems, workerBalance, currentCust
         </div>
         <div className="w-full md:w-80 h-64 md:h-full flex-shrink-0">
           <Cart 
-            items={cartItems}
+            items={localCart}
             onRemoveItem={handleRemoveItem}
             onClearCart={handleClearCart}
             onRequestPayment={handleRequestPayment}

@@ -50,11 +50,31 @@ export class CanvasSnapshotBroadcaster {
 
       this.ctx?.drawImage(this.video, 0, 0, targetWidth, targetHeight);
 
-      // Lightweight JPEG frame (quality 0.50)
-      const dataUrl = this.canvas.toDataURL("image/jpeg", 0.50);
+      // 1. Send base64 frame for universal web compatibility
+      const dataUrl = this.canvas.toDataURL("image/jpeg", 0.55);
       if (this.socket.readyState === WebSocket.OPEN) {
         this.socket.send(JSON.stringify({ type: "cctv-frame", frame: dataUrl }));
       }
+
+      // 2. Also send binary frame
+      const timestamp = Date.now();
+      this.canvas.toBlob(
+        (blob) => {
+          if (!blob || this.socket.readyState !== WebSocket.OPEN) return;
+          blob.arrayBuffer().then((buffer) => {
+            if (this.socket.bufferedAmount > 64 * 1024) return;
+            const payload = new Uint8Array(8 + buffer.byteLength);
+            const dataView = new DataView(payload.buffer);
+            dataView.setFloat64(0, timestamp, true);
+            payload.set(new Uint8Array(buffer), 8);
+            if (this.socket.readyState === WebSocket.OPEN) {
+              this.socket.send(payload);
+            }
+          });
+        },
+        "image/jpeg",
+        0.55
+      );
     } catch (err) {
       // Ignore frame encode errors
     } finally {
@@ -87,6 +107,26 @@ export class CanvasSnapshotViewer {
   }
 
   private async handleMessage(event: MessageEvent) {
+    // Handle JSON string cctv-frame
+    if (typeof event.data === "string") {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "cctv-frame" && msg.frame) {
+          const img = new Image();
+          img.onload = () => {
+            if (this.canvas.width !== img.width || this.canvas.height !== img.height) {
+              this.canvas.width = img.width;
+              this.canvas.height = img.height;
+            }
+            this.ctx?.drawImage(img, 0, 0);
+            this.onFrameReceived?.();
+          };
+          img.src = msg.frame;
+        }
+      } catch {}
+      return;
+    }
+
     if (!(event.data instanceof Blob) && !(event.data instanceof ArrayBuffer)) return;
     
     let buffer: ArrayBuffer;

@@ -63,6 +63,9 @@ export function useGameState(socket: PartySocket | null) {
           case 'room-state':
             setGameState(msg.state);
             setWorkerState(msg.state.workerState);
+            if (msg.state.workerState?.cart) {
+              setCartItems(msg.state.workerState.cart);
+            }
             setCurrentTurn(msg.state.currentTurn);
             const myConnId = msg.selfId || myId || socket.id;
             if (msg.selfId) {

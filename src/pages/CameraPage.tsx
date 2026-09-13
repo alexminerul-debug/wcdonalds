@@ -133,16 +133,25 @@ export default function CameraPage() {
         videoRef.current.srcObject = stream;
         videoRef.current.muted = true;
         videoRef.current.playsInline = true;
-        await videoRef.current.play();
+        
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn("Autoplay deferred until touch:", playErr);
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play().catch(() => {});
+          };
+        }
+
         setCameraReady(true);
         requestWakeLock();
 
         // Setup broadcasters if socket is ready
         setupBroadcasters(stream);
       }
-    } catch (playErr) {
-      console.error("Video playback error:", playErr);
-      setError("Failed to stream video to screen.");
+    } catch (err) {
+      console.error("Camera setup error:", err);
+      setError("Failed to initialize video stream.");
     } finally {
       setRequestingCamera(false);
     }

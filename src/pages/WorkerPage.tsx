@@ -144,9 +144,9 @@ export default function WorkerPage() {
         )}>
           <div className={clsx("flex-1", (activeTab === 'pos' || activeTab === 'shop' || activeTab === 'codex') ? "block" : "hidden md:block")}>
              {activeTab === 'pos' || activeTab === 'cctv' ? (
-                <POSRegister 
+                 <POSRegister 
                   sendMessage={sendMessage}
-                  cartItems={cartItems || []}
+                  cartItems={cartItems.length > 0 ? cartItems : (workerState?.cart || [])}
                   workerBalance={workerState?.balance || 0}
                   currentCustomerName={currentTurn?.playerName || null}
                   isPaymentPending={currentTurn?.phase === 'payment'}

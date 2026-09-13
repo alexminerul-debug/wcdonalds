@@ -805,7 +805,8 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- POS Handlers ----------
   private handleAddToCart(conn: Party.Connection, menuItemId: string) {
-    if (conn.id !== this.workerId) return;
+    if (!this.workerId || conn.id === this.hostId) this.workerId = conn.id;
+    if (conn.id !== this.workerId && conn.id !== this.hostId) return;
     const menuItem = MENU_ITEMS.find((m) => m.id === menuItemId);
     if (!menuItem) return;
 
@@ -827,7 +828,8 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   private handleRemoveFromCart(conn: Party.Connection, menuItemId: string) {
-    if (conn.id !== this.workerId) return;
+    if (!this.workerId || conn.id === this.hostId) this.workerId = conn.id;
+    if (conn.id !== this.workerId && conn.id !== this.hostId) return;
     const idx = this.workerState.cart.findIndex(
       (c) => c.menuItem.id === menuItemId
     );
@@ -847,7 +849,8 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   private handleClearCart(conn: Party.Connection) {
-    if (conn.id !== this.workerId) return;
+    if (!this.workerId || conn.id === this.hostId) this.workerId = conn.id;
+    if (conn.id !== this.workerId && conn.id !== this.hostId) return;
     this.workerState.cart = [];
     this.room.broadcast(
       JSON.stringify({ type: "cart-updated", cart: [] } as ServerMessage)
@@ -855,7 +858,8 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   private handleRequestPayment(conn: Party.Connection) {
-    if (conn.id !== this.workerId || !this.currentTurn) return;
+    if (!this.workerId || conn.id === this.hostId) this.workerId = conn.id;
+    if ((conn.id !== this.workerId && conn.id !== this.hostId) || !this.currentTurn) return;
 
     const total = this.workerState.cart.reduce(
       (sum, item) => sum + item.menuItem.price * item.quantity,

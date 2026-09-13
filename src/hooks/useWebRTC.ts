@@ -60,7 +60,7 @@ export function useWebRTC(
 
   // Handle fallback base64 frames if sent as cctv-frame
   useEffect(() => {
-    if (!socket || role !== 'viewer' || !canvasRef.current) return;
+    if (!socket || role !== 'viewer') return;
 
     const handleFrameMessage = (event: MessageEvent) => {
       try {
@@ -89,7 +89,7 @@ export function useWebRTC(
 
     socket.addEventListener('message', handleFrameMessage);
     return () => socket.removeEventListener('message', handleFrameMessage);
-  }, [socket, role, canvasRef]);
+  }, [socket, role]);
 
   // Cleanup on unmount
   useEffect(() => {
