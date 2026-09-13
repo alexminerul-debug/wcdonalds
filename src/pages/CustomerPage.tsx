@@ -18,6 +18,7 @@ import { VictoryScreen } from "@/components/customer/VictoryScreen";
 import { GlitchText } from "@/components/ui/GlitchText";
 import { LanguageSelector } from "@/components/common/LanguageSelector";
 import { LeaveRoomButton } from "@/components/common/LeaveRoomButton";
+import { NightCutsceneModal } from "@/components/common/NightCutsceneModal";
 import { Moon, Clock, Skull, CheckCircle, ArrowRight } from "lucide-react";
 
 export default function CustomerPage() {
@@ -27,6 +28,8 @@ export default function CustomerPage() {
   const [showMenuPreview, setShowMenuPreview] = useState(false);
   const [resultDismissed, setResultDismissed] = useState(false);
   const [prevTurnIndex, setPrevTurnIndex] = useState(-1);
+  const [showNightCutscene, setShowNightCutscene] = useState(false);
+  const [lastCutsceneNight, setLastCutsceneNight] = useState<number | null>(null);
 
   const { socket, sendMessage, connectionStatus } = useGameSocket(code || "");
   const {
@@ -118,6 +121,14 @@ export default function CustomerPage() {
       return () => clearTimeout(timer);
     }
   }, [lastResult, currentTurn?.phase, resultDismissed]);
+
+  // Trigger 12:00 AM cutscene when night starts
+  useEffect(() => {
+    if (gameState?.phase === 'playing' && gameState.currentNight && gameState.currentNight !== lastCutsceneNight) {
+      setLastCutsceneNight(gameState.currentNight);
+      setShowNightCutscene(true);
+    }
+  }, [gameState?.phase, gameState?.currentNight, lastCutsceneNight]);
 
   // Vibrate on payment request
   useEffect(() => {
@@ -420,6 +431,14 @@ export default function CustomerPage() {
 
   return (
     <>
+      {showNightCutscene && (
+        <NightCutsceneModal
+          nightNumber={gameState?.currentNight || 1}
+          isBloodMoon={gameState?.isBloodMoon}
+          onDismiss={() => setShowNightCutscene(false)}
+        />
+      )}
+
       {/* Universal Top-Level Modal: Guaranteed to render on top of EVERYTHING whenever payment is active */}
       {shouldShowPayment && activePayment && (
         <SlideToPayModal

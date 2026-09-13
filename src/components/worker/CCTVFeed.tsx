@@ -13,6 +13,7 @@ interface CCTVFeedProps {
   cctvGlitch: { effect: 'static' | 'blackout' | 'distortion'; isAnomaly: boolean } | null;
   hasUvScanner: boolean;
   hasStabilizer: boolean;
+  isBloodMoon?: boolean;
 }
 
 export function CCTVFeed({
@@ -23,7 +24,8 @@ export function CCTVFeed({
   nightVisionOn,
   cctvGlitch,
   hasUvScanner,
-  hasStabilizer
+  hasStabilizer,
+  isBloodMoon,
 }: CCTVFeedProps) {
   const isDisconnected = connectionMode === 'disconnected';
   const glitchEffect = hasStabilizer && cctvGlitch?.effect === 'blackout' ? 'distortion' : cctvGlitch?.effect;
@@ -66,6 +68,7 @@ export function CCTVFeed({
           <GlitchEffects 
             active={isAnomaly && !!cctvGlitch} 
             effect={glitchEffect || null} 
+            isBloodMoon={isBloodMoon}
           />
 
           {hasUvScanner && (

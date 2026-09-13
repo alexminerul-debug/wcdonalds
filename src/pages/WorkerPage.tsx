@@ -11,6 +11,7 @@ import { DecisionPanel } from '@/components/worker/DecisionPanel';
 import { JumpscareOverlay } from '@/components/worker/JumpscareOverlay';
 import { LanguageSelector } from '@/components/common/LanguageSelector';
 import { LeaveRoomButton } from '@/components/common/LeaveRoomButton';
+import { NightCutsceneModal } from '@/components/common/NightCutsceneModal';
 import { Heart, Moon, Skull } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useTranslation } from '@/lib/i18n';
@@ -30,6 +31,8 @@ export default function WorkerPage() {
   const [activeTab, setActiveTab] = useState<'pos' | 'cctv' | 'codex' | 'shop'>('pos');
   const [nightVisionOn, setNightVisionOn] = useState(false);
   const [showJumpscare, setShowJumpscare] = useState(false);
+  const [showNightCutscene, setShowNightCutscene] = useState(false);
+  const [lastCutsceneNight, setLastCutsceneNight] = useState<number | null>(null);
 
   // Auto-register as Worker on mount / connect
   useEffect(() => {
@@ -92,9 +95,25 @@ export default function WorkerPage() {
   const hasUvScanner = workerState?.abilities.includes('uv-scanner') || false;
   const hasStabilizer = workerState?.abilities.includes('static-stabilizer') || false;
 
+  // Trigger 12:00 AM cutscene when night starts
+  useEffect(() => {
+    if (gameState?.phase === 'playing' && gameState.currentNight && gameState.currentNight !== lastCutsceneNight) {
+      setLastCutsceneNight(gameState.currentNight);
+      setShowNightCutscene(true);
+    }
+  }, [gameState?.phase, gameState?.currentNight, lastCutsceneNight]);
+
   return (
     <div className="min-h-screen bg-black flex flex-col font-mono text-bone overflow-hidden selection:bg-blood/30">
       <JumpscareOverlay active={showJumpscare} onDismiss={() => setShowJumpscare(false)} />
+
+      {showNightCutscene && (
+        <NightCutsceneModal
+          nightNumber={gameState?.currentNight || 1}
+          isBloodMoon={gameState?.isBloodMoon}
+          onDismiss={() => setShowNightCutscene(false)}
+        />
+      )}
 
       {/* Top HUD */}
       <header className="bg-abyss border-b border-smoke/30 p-2 md:p-3 flex justify-between items-center z-10 shrink-0 shadow-md">
@@ -128,18 +147,23 @@ export default function WorkerPage() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden pb-32 md:pb-24">
         
-        {/* Mobile Tabs Navigation */}
-        <div className="md:hidden flex bg-void border-b border-smoke/30 shrink-0">
-          {(['pos', 'cctv', 'codex', 'shop'] as const).map(tab => (
+        {/* Mobile & Desktop View Mode Tabs Navigation */}
+        <div className="flex bg-void border-b border-smoke/30 shrink-0 px-2">
+          {(['pos', 'shop', 'codex', 'cctv'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={clsx(
-                "flex-1 py-2.5 text-xs font-bold transition-colors uppercase border-b-2",
-                activeTab === tab ? "border-amber-glow text-amber-glow bg-abyss" : "border-transparent text-ash hover:bg-smoke/5"
+                "py-2.5 px-4 text-xs font-mono font-bold transition-colors uppercase border-b-2 flex items-center gap-1.5",
+                activeTab === tab 
+                  ? "border-amber-glow text-amber-glow bg-abyss" 
+                  : "border-transparent text-ash hover:text-bone hover:bg-smoke/5",
+                // CCTV tab only visible on mobile (since on desktop CCTV is pinned on right)
+                tab === 'cctv' && "md:hidden"
               )}
             >
               {tab === 'pos' ? t('posTab') : tab === 'cctv' ? t('cctvTab') : tab === 'shop' ? t('shopTab') : t('codexTab')}
+              {tab === 'shop' && <span className="text-[10px] text-safe font-normal">${workerState?.balance.toFixed(0)}</span>}
             </button>
           ))}
         </div>
@@ -147,10 +171,10 @@ export default function WorkerPage() {
         {/* Desktop Left Column / Mobile Active Tab */}
         <div className={clsx(
           "flex-1 flex flex-col p-2 md:p-4 gap-4 overflow-y-auto custom-scrollbar",
-          (activeTab !== 'pos' && activeTab !== 'shop' && activeTab !== 'codex') && "hidden md:flex"
+          activeTab === 'cctv' && "hidden md:flex"
         )}>
-          <div className={clsx("flex-1", (activeTab === 'pos' || activeTab === 'shop' || activeTab === 'codex') ? "block" : "hidden md:block")}>
-             {activeTab === 'pos' || activeTab === 'cctv' ? (
+          <div className="flex-1">
+             {activeTab === 'pos' || (activeTab === 'cctv' && window.innerWidth >= 768) ? (
                  <POSRegister 
                   sendMessage={sendMessage}
                   cartItems={cartItems.length > 0 ? cartItems : (workerState?.cart || [])}
@@ -162,6 +186,7 @@ export default function WorkerPage() {
                 <AbilityShop 
                   balance={workerState?.balance || 0}
                   ownedAbilities={workerState?.abilities || []}
+                  lives={workerState?.lives || 3}
                   onPurchase={handlePurchaseAbility}
                 />
              ) : (
@@ -186,6 +211,7 @@ export default function WorkerPage() {
                 cctvGlitch={cctvGlitch}
                 hasUvScanner={hasUvScanner}
                 hasStabilizer={hasStabilizer}
+                isBloodMoon={gameState?.isBloodMoon}
               />
               <button
                 onClick={() => setNightVisionOn(!nightVisionOn)}
@@ -199,9 +225,11 @@ export default function WorkerPage() {
               </button>
             </div>
 
-            <div className="hidden md:block flex-1">
-               <AnomalyCodex />
-            </div>
+            {activeTab !== 'codex' && (
+              <div className="hidden md:block flex-1">
+                 <AnomalyCodex />
+              </div>
+            )}
           </div>
         </div>
       </main>

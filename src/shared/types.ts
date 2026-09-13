@@ -24,6 +24,8 @@ export interface MenuItem {
   name: string;
   price: number;
   emoji: string;
+  category?: "burgers" | "chicken" | "sides" | "drinks" | "desserts";
+  description?: string;
 }
 
 export interface CartItem {
@@ -37,6 +39,8 @@ export interface AnomalyTrait {
   display: string;        // shown to anomaly player
   aiPrompt: string;       // sent to OpenRouter for detection
   category: "facial" | "postural" | "gestural" | "behavioral";
+  difficulty?: "easy" | "medium" | "hard";
+  tip?: string;
 }
 
 // ---------- Turn State ----------
@@ -98,6 +102,7 @@ export interface GameRoomState {
   currentNight: number;       // 1 to 5
   maxNights: number;          // 5
   nightTime: string;          // "12:00 AM" to "6:00 AM"
+  isBloodMoon?: boolean;      // 30% chance blood red moon event
 }
 
 export interface GameConfig {
@@ -178,4 +183,4 @@ export type ServerMessage =
   | { type: "ice-candidate"; viewerId: string; candidate: unknown }
   | { type: "cctv-frame"; frame: string; ts?: number }
   | { type: "camera-ready" }
-  | { type: "cctv-glitch"; effect: "static" | "blackout" | "distortion"; isAnomaly: boolean };
+  | { type: "cctv-glitch"; effect: "static" | "blackout" | "distortion" | "scanline"; isAnomaly: boolean };

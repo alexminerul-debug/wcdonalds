@@ -7,10 +7,12 @@ interface OrderDisplayProps {
   isAnomaly: boolean;
 }
 
-export function OrderDisplay({ items, isAnomaly }: OrderDisplayProps) {
-  // Group identical items
-  const groupedItems = items.reduce((acc, item) => {
-    const existing = acc.find(i => i.menuItem.id === item.id);
+export function OrderDisplay({ items = [], isAnomaly }: OrderDisplayProps) {
+  // Group identical items defensively
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  const groupedItems = safeItems.reduce((acc, item) => {
+    if (!item || !item.id) return acc;
+    const existing = acc.find(i => i.menuItem?.id === item.id);
     if (existing) {
       existing.quantity += 1;
     } else {

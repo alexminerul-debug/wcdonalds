@@ -8,42 +8,113 @@ const PORT = process.env.PORT || 1999;
 // Constants
 // ============================================
 const MENU_ITEMS = [
-  { id: "mcscreamer", name: "McScreamer Burger", price: 5, emoji: "🍔" },
-  { id: "shadow-fries", name: "Shadow Fries", price: 3, emoji: "🍟" },
-  { id: "cryptic-soda", name: "Cryptic Soda", price: 2, emoji: "🥤" },
-  { id: "anomaly-nugs", name: "Anomaly Nuggets", price: 4, emoji: "🍗" },
-  { id: "gloom-shake", name: "Gloom Shake", price: 4, emoji: "🥛" },
+  // Burgers
+  { id: "big-wc",          name: "Big Wc Double Burger",     price: 6, emoji: "🍔", category: "burgers" },
+  { id: "quarter-anomaly", name: "Quarter Pounder Anomaly",  price: 6, emoji: "🍔", category: "burgers" },
+  { id: "mcscreamer",      name: "McScreamer Burger",        price: 5, emoji: "🍔", category: "burgers" },
+  { id: "filet-o-fear",    name: "Filet-O-Fear Fish",        price: 5, emoji: "🐟", category: "burgers" },
+  { id: "shadow-cheese",   name: "Double Shadow Burger",     price: 4, emoji: "🍔", category: "burgers" },
+
+  // Chicken
+  { id: "anomaly-nugs",    name: "Anomaly Nuggets (6pc)",    price: 4, emoji: "🍗", category: "chicken" },
+  { id: "ghost-tenders",   name: "Ghost Pepper Tenders",     price: 5, emoji: "🌶️", category: "chicken" },
+  { id: "cursed-mcchicken",name: "Cursed McChicken",         price: 4, emoji: "🥪", category: "chicken" },
+
+  // Sides
+  { id: "shadow-fries",    name: "Large Shadow Fries",       price: 3, emoji: "🍟", category: "sides" },
+  { id: "sorrow-rings",    name: "Onion Rings of Sorrow",    price: 3, emoji: "🧅", category: "sides" },
+  { id: "hash-brown",      name: "Hash Brown of the Damned", price: 2, emoji: "🥔", category: "sides" },
+
+  // Beverages
+  { id: "cryptic-soda",    name: "Cryptic Fountain Soda",    price: 2, emoji: "🥤", category: "drinks" },
+  { id: "gloom-shake",     name: "Gloom Milkshake",          price: 4, emoji: "🥛", category: "drinks" },
+  { id: "grimace-potion",  name: "Grimace's Secret Potion",  price: 4, emoji: "🧪", category: "drinks" },
+  { id: "abyss-coffee",    name: "Dark Abyss Roast Coffee",  price: 2, emoji: "☕", category: "drinks" },
+
+  // Desserts
+  { id: "doom-pie",        name: "Baked Apple Pie of Doom",  price: 2, emoji: "🥧", category: "desserts" },
+  { id: "void-mcflurry",   name: "Void Oreo McFlurry",       price: 4, emoji: "🍨", category: "desserts" },
 ];
 
 const ANOMALY_TRAITS = [
-  { id: "no-blink", display: "Never blink while ordering — keep your eyes wide open the entire time", category: "facial" },
-  { id: "unnatural-grin", display: "Maintain an unnaturally wide grin when staring at the camera", category: "facial" },
-  { id: "dead-stare", display: "Stare directly at the camera with a completely blank, emotionless expression", category: "facial" },
-  { id: "slow-blink", display: "Blink extremely slowly — each blink should take 2-3 full seconds", category: "facial" },
-  { id: "head-tilt-left", display: "Tilt your head 45° to the left when mentioning fries", category: "postural" },
-  { id: "head-tilt-right", display: "Slowly tilt your head to the right during the entire order", category: "postural" },
-  { id: "look-ceiling", display: "Slowly look up at the ceiling mid-sentence and hold the gaze for 3 seconds", category: "postural" },
-  { id: "lean-forward", display: "Lean uncomfortably close toward the counter/camera", category: "postural" },
-  { id: "sway-side", display: "Slowly sway your body side to side while speaking", category: "postural" },
-  { id: "tap-counter", display: "Tap the counter rhythmically three times in a row", category: "gestural" },
-  { id: "point-camera", display: "Slowly raise your hand and point directly at the camera", category: "gestural" },
-  { id: "wave-slow", display: "Give a very slow, creepy wave at the camera mid-order", category: "gestural" },
-  { id: "hands-clasped", display: "Keep both hands clasped together tightly in front of you", category: "gestural" },
-  { id: "freeze", display: "Remain completely frozen and motionless for 5 full seconds mid-order", category: "behavioral" },
-  { id: "turn-away", display: "Suddenly turn your head to look behind you as if someone called your name", category: "behavioral" },
-  { id: "cover-mouth", display: "Cover your mouth with your hand while speaking your order", category: "behavioral" },
+  // Easy
+  { id: "tongue-out", display: "Stick your tongue out slightly or bite your tongue while placing your order", category: "facial", difficulty: "easy" },
+  { id: "wink-loop", display: "Wink repeatedly with one eye while speaking to the worker", category: "facial", difficulty: "easy" },
+  { id: "scratch-nose", display: "Scratch or pinch your nose repeatedly while ordering", category: "gestural", difficulty: "easy" },
+  { id: "cover-one-eye", display: "Cover one eye completely with your hand while looking at the camera", category: "gestural", difficulty: "easy" },
+  { id: "nod-rapid", display: "Nod your head up and down continuously like a bobblehead", category: "postural", difficulty: "easy" },
+  { id: "head-shake-no", display: "Shake your head left to right as if saying 'no' while ordering your food", category: "postural", difficulty: "easy" },
+  { id: "peace-sign", display: "Hold up a peace / V sign with your fingers near your face", category: "gestural", difficulty: "easy" },
+  { id: "thumbs-up", display: "Give a steady thumbs-up toward the camera lens during the order", category: "gestural", difficulty: "easy" },
+  { id: "scratch-head", display: "Scratch the top of your head with your fingertips", category: "gestural", difficulty: "easy" },
+  { id: "hand-on-cheek", display: "Rest your cheek against your open palm or fist while looking forward", category: "postural", difficulty: "easy" },
+
+  // Medium
+  { id: "no-blink", display: "Never blink while ordering — keep your eyes wide open the entire time", category: "facial", difficulty: "medium" },
+  { id: "unnatural-grin", display: "Maintain an unnaturally wide grin when staring at the camera", category: "facial", difficulty: "medium" },
+  { id: "dead-stare", display: "Stare directly at the camera with a completely blank, emotionless expression", category: "facial", difficulty: "medium" },
+  { id: "slow-blink", display: "Blink extremely slowly — each blink should take 2-3 full seconds", category: "facial", difficulty: "medium" },
+  { id: "head-tilt-left", display: "Tilt your head 45° to the left when mentioning fries", category: "postural", difficulty: "medium" },
+  { id: "head-tilt-right", display: "Slowly tilt your head to the right during the entire order", category: "postural", difficulty: "medium" },
+  { id: "point-camera", display: "Slowly raise your hand and point directly at the camera", category: "gestural", difficulty: "medium" },
+  { id: "wave-slow", display: "Give a very slow, creepy wave at the camera mid-order", category: "gestural", difficulty: "medium" },
+  { id: "cover-mouth", display: "Cover your mouth with your hand while speaking your order", category: "behavioral", difficulty: "medium" },
+
+  // Hard
+  { id: "look-ceiling", display: "Slowly look up at the ceiling mid-sentence and hold the gaze for 3 seconds", category: "postural", difficulty: "hard" },
+  { id: "lean-forward", display: "Lean uncomfortably close toward the counter/camera", category: "postural", difficulty: "hard" },
+  { id: "sway-side", display: "Slowly sway your body side to side while speaking", category: "postural", difficulty: "hard" },
+  { id: "tap-counter", display: "Tap the counter rhythmically three times in a row", category: "gestural", difficulty: "hard" },
+  { id: "hands-clasped", display: "Keep both hands clasped together tightly in front of you", category: "gestural", difficulty: "hard" },
+  { id: "freeze", display: "Remain completely frozen and motionless for 5 full seconds mid-order", category: "behavioral", difficulty: "hard" },
+  { id: "turn-away", display: "Suddenly turn your head to look behind you as if someone called your name", category: "behavioral", difficulty: "hard" },
 ];
 
 function generateRandomOrder() {
-  const count = 2 + Math.floor(Math.random() * 3);
-  const shuffled = [...MENU_ITEMS].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  const mains = MENU_ITEMS.filter((i) => i.category === "burgers" || i.category === "chicken");
+  const sides = MENU_ITEMS.filter((i) => i.category === "sides");
+  const drinks = MENU_ITEMS.filter((i) => i.category === "drinks");
+  const desserts = MENU_ITEMS.filter((i) => i.category === "desserts");
+
+  const roll = Math.random();
+  const order = [];
+
+  if (roll < 0.55) {
+    order.push(mains[Math.floor(Math.random() * mains.length)]);
+    order.push(sides[Math.floor(Math.random() * sides.length)]);
+    order.push(drinks[Math.floor(Math.random() * drinks.length)]);
+    if (Math.random() < 0.35) order.push(desserts[Math.floor(Math.random() * desserts.length)]);
+  } else if (roll < 0.85) {
+    order.push(mains[Math.floor(Math.random() * mains.length)]);
+    order.push(mains[Math.floor(Math.random() * mains.length)]);
+    order.push(sides[Math.floor(Math.random() * sides.length)]);
+    if (Math.random() < 0.5) order.push(sides[Math.floor(Math.random() * sides.length)]);
+    order.push(drinks[Math.floor(Math.random() * drinks.length)]);
+  } else {
+    order.push(sides[Math.floor(Math.random() * sides.length)]);
+    order.push(drinks[Math.floor(Math.random() * drinks.length)]);
+    order.push(desserts[Math.floor(Math.random() * desserts.length)]);
+  }
+
+  return order.filter(Boolean);
 }
 
-function selectAnomalyTraits() {
-  const count = 1 + Math.floor(Math.random() * 2);
-  const shuffled = [...ANOMALY_TRAITS].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+function selectAnomalyTraits(isHardMode = false) {
+  const easyTraits = ANOMALY_TRAITS.filter((t) => t.difficulty === "easy");
+  const otherTraits = ANOMALY_TRAITS.filter((t) => t.difficulty !== "easy");
+  const count = 2 + Math.floor(Math.random() * 2);
+  const selected = [];
+
+  if (!isHardMode && easyTraits.length > 0) {
+    selected.push(easyTraits[Math.floor(Math.random() * easyTraits.length)]);
+  }
+
+  const pool = [...(isHardMode ? otherTraits : ANOMALY_TRAITS)].sort(() => Math.random() - 0.5);
+  for (const t of pool) {
+    if (selected.length >= count) break;
+    if (!selected.find((s) => s.id === t.id)) selected.push(t);
+  }
+  return selected;
 }
 
 // ============================================
@@ -79,6 +150,7 @@ class GameRoom {
     this.maxNights = 5;
     this.nightTime = "12:00 AM";
     this.turnSecrets = [];
+    this.isBloodMoon = false;
   }
 
   getPublicState() {
@@ -98,6 +170,7 @@ class GameRoom {
       currentNight: this.currentNight || 1,
       maxNights: this.maxNights || 5,
       nightTime: this.nightTime || "12:00 AM",
+      isBloodMoon: Boolean(this.isBloodMoon),
     };
   }
 
@@ -405,12 +478,16 @@ class GameRoom {
       case "serve-order": {
         if (!this.currentTurn) return;
         const isAnomaly = this.secretRoles.get(this.currentTurn.playerId) === "anomaly";
+        const multiplier = this.isBloodMoon ? 2 : 1;
         const result = isAnomaly
           ? { type: "served_anomaly", pointsAwarded: -20, penalty: 20, message: "YOU SERVED AN ANOMALY!", isAnomaly: true }
-          : { type: "served_normal", pointsAwarded: 15, message: "Order served accurately to normal customer.", isAnomaly: false };
+          : { type: "served_normal", pointsAwarded: 15 * multiplier, message: `Order served accurately! (+${15 * multiplier} coins)`, isAnomaly: false };
 
         if (isAnomaly) this.workerState.lives--;
-        else this.workerState.totalServed++;
+        else {
+          this.workerState.totalServed++;
+          this.workerState.balance += 15 * multiplier;
+        }
 
         this.currentTurn.phase = "resolved";
         this.currentTurn.result = result;
@@ -430,12 +507,17 @@ class GameRoom {
       case "report-anomaly": {
         if (!this.currentTurn) return;
         const isAnomaly = this.secretRoles.get(this.currentTurn.playerId) === "anomaly";
+        const multiplier = this.isBloodMoon ? 2 : 1;
         const result = isAnomaly
-          ? { type: "reported_anomaly", pointsAwarded: 25, message: "ANOMALY IDENTIFIED! Neutralized successfully.", isAnomaly: true }
+          ? { type: "reported_anomaly", pointsAwarded: 25 * multiplier, message: `ANOMALY IDENTIFIED! (+${25 * multiplier} coins)`, isAnomaly: true }
           : { type: "reported_innocent", pointsAwarded: -15, penalty: 15, message: "Wrongful accusation! Innocent customer ejected.", isAnomaly: false };
 
-        if (isAnomaly) this.workerState.totalCaught++;
-        else this.workerState.lives--;
+        if (isAnomaly) {
+          this.workerState.totalCaught++;
+          this.workerState.balance += 25 * multiplier;
+        } else {
+          this.workerState.lives--;
+        }
 
         this.currentTurn.phase = "resolved";
         this.currentTurn.result = result;
@@ -449,6 +531,56 @@ class GameRoom {
             this.advanceTurn();
           }
         }, 3000);
+        break;
+      }
+
+      case "purchase-ability": {
+        const abilityId = msg.abilityId;
+        const prices = {
+          "extra-life": 350,
+          "uv-scanner": 20,
+          "spectral-analyzer": 35,
+          "static-stabilizer": 15,
+        };
+        const price = prices[abilityId];
+        if (price === undefined) break;
+
+        if (this.workerState.balance < price) {
+          const ws = this.connections.get(id);
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "error", message: "Insufficient funds" }));
+          }
+          break;
+        }
+
+        if (abilityId === "extra-life") {
+          if (this.workerState.lives >= 5) {
+            const ws = this.connections.get(id);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "error", message: "Maximum lives (5) already reached" }));
+            }
+            break;
+          }
+          this.workerState.balance -= price;
+          this.workerState.lives = (this.workerState.lives || 3) + 1;
+        } else {
+          if (this.workerState.abilities.includes(abilityId)) {
+            const ws = this.connections.get(id);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "error", message: "Ability already owned" }));
+            }
+            break;
+          }
+          this.workerState.balance -= price;
+          this.workerState.abilities.push(abilityId);
+        }
+
+        this.broadcast({
+          type: "ability-purchased",
+          abilityId,
+          balance: this.workerState.balance,
+        });
+        this.broadcastState();
         break;
       }
 
@@ -565,6 +697,9 @@ class GameRoom {
     this.currentTurnIndex = -1;
     this.nightTime = "12:00 AM";
 
+    // 30% chance for a Red Night Moon (Blood Moon)
+    this.isBloodMoon = Math.random() < 0.30;
+
     // Gather all real human customers in the room (anyone who is not worker and not camera)
     let humanCustomers = Array.from(this.players.values()).filter(
       (p) => p.id !== this.workerId && p.id !== this.cameraId
@@ -576,17 +711,18 @@ class GameRoom {
     });
 
     let customerPool = [];
+    // If Blood Moon, double customer volume (2x customers!)
+    const customerMultiplier = this.isBloodMoon ? 2 : 1;
+
     if (humanCustomers.length > 0) {
-      // Repeat customers so there are multiple visits per night:
-      // If 1 customer: 3 visits in Night 1-2, 4 visits in Night 3-4, 5 visits in Night 5
-      // If 2 customers: 4 visits total (2 each)
-      // If 3+ customers: each visits at least once, plus repeat visits
-      const targetOrders =
+      const baseOrders =
         this.currentNight <= 2
           ? Math.max(3, humanCustomers.length)
           : this.currentNight <= 4
           ? Math.max(4, humanCustomers.length)
           : Math.max(5, humanCustomers.length);
+
+      const targetOrders = baseOrders * customerMultiplier;
 
       while (customerPool.length < targetOrders) {
         const shuffled = [...humanCustomers].sort(() => Math.random() - 0.5);
@@ -596,8 +732,10 @@ class GameRoom {
         }
       }
     } else {
-      // Solo test mode with NPCs
-      const npcs = ["Alex (Normal)", "Jordan (The Anomaly)", "Taylor (Normal)"];
+      // Solo test mode with NPCs (6 if Blood Moon, 3 if normal)
+      const npcs = this.isBloodMoon
+        ? ["Alex (Normal)", "Jordan (The Anomaly)", "Taylor (Normal)", "Morgan (The Anomaly)", "Casey (Normal)", "Sam (The Anomaly)"]
+        : ["Alex (Normal)", "Jordan (The Anomaly)", "Taylor (Normal)"];
       npcs.forEach((name, i) => {
         const dummyId = `npc-${i + 1}`;
         const dummyPlayer = {
@@ -609,23 +747,24 @@ class GameRoom {
         };
         this.players.set(dummyId, dummyPlayer);
       });
-      customerPool = ["npc-1", "npc-2", "npc-3"];
+      customerPool = npcs.map((_, i) => `npc-${i + 1}`);
     }
 
     this.customerQueue = customerPool;
 
-    // Determine anomaly count for this night (escalating difficulty!)
-    const numAnomalies =
-      this.currentNight === 1
-        ? 1
-        : this.currentNight <= 2
-        ? 1
-        : this.currentNight <= 4
-        ? Math.min(2, Math.floor(customerPool.length / 2))
-        : Math.min(3, Math.ceil(customerPool.length / 2));
+    // Determine anomaly count (Blood Moon = 65% anomalies, Normal = standard scaling)
+    const numAnomalies = this.isBloodMoon
+      ? Math.max(2, Math.floor(customerPool.length * 0.65))
+      : this.currentNight === 1
+      ? 1
+      : this.currentNight <= 2
+      ? 1
+      : this.currentNight <= 4
+      ? Math.min(2, Math.floor(customerPool.length / 2))
+      : Math.min(3, Math.ceil(customerPool.length / 2));
 
     const anomalyIndices = new Set();
-    while (anomalyIndices.size < numAnomalies) {
+    while (anomalyIndices.size < numAnomalies && anomalyIndices.size < customerPool.length) {
       anomalyIndices.add(Math.floor(Math.random() * customerPool.length));
     }
 
@@ -634,7 +773,8 @@ class GameRoom {
       const isAnomaly = anomalyIndices.has(i);
       const secretRole = isAnomaly ? "anomaly" : "normal";
       const order = generateRandomOrder();
-      const traits = isAnomaly ? selectAnomalyTraits() : null;
+      // On Blood Moon, select harder anomaly traits!
+      const traits = isAnomaly ? selectAnomalyTraits(this.isBloodMoon) : null;
       this.turnSecrets.push({ secretRole, order, traits });
     }
 
@@ -642,12 +782,19 @@ class GameRoom {
       type: "shift-started",
       queue: this.customerQueue,
       night: this.currentNight,
+      isBloodMoon: this.isBloodMoon,
     });
     this.advanceTurn();
   }
 
   advanceTurn() {
     this.currentTurnIndex++;
+
+    // Clear previous glitch intervals if any
+    if (this.glitchInterval) {
+      clearInterval(this.glitchInterval);
+      this.glitchInterval = null;
+    }
 
     // Check if worker died
     if (this.workerState.lives <= 0) {
@@ -748,15 +895,34 @@ class GameRoom {
     this.secretOrders.set(playerId, turnSecret.order);
     this.secretTraits.set(playerId, turnSecret.traits);
 
-    // Trigger CCTV glitch if anomaly
-    if (turnSecret.secretRole === "anomaly") {
+    // Trigger frequent CCTV glitches during anomaly turn and blood moon
+    if (turnSecret.secretRole === "anomaly" || this.isBloodMoon) {
+      // Immediate glitch after 1.5s
       setTimeout(() => {
-        this.broadcast({
-          type: "cctv-glitch",
-          effect: "distortion",
-          isAnomaly: true,
-        });
-      }, 3500);
+        if (this.currentTurn?.playerId === playerId && this.currentTurn.phase !== "resolved") {
+          this.broadcast({
+            type: "cctv-glitch",
+            effect: turnSecret.secretRole === "anomaly" ? "distortion" : "static",
+            isAnomaly: turnSecret.secretRole === "anomaly",
+          });
+        }
+      }, 1500);
+
+      // Recurring glitches every 6.5s while customer is active
+      this.glitchInterval = setInterval(() => {
+        if (this.currentTurn?.playerId === playerId && this.currentTurn.phase !== "resolved") {
+          const effects = ["static", "distortion", "blackout"];
+          const effect = effects[Math.floor(Math.random() * effects.length)];
+          this.broadcast({
+            type: "cctv-glitch",
+            effect,
+            isAnomaly: turnSecret.secretRole === "anomaly",
+          });
+        } else {
+          clearInterval(this.glitchInterval);
+          this.glitchInterval = null;
+        }
+      }, 6500);
     }
 
     this.broadcastState();

@@ -8,7 +8,10 @@ interface AnomalyObjectivesProps {
   detectedTraits: string[];
 }
 
-export function AnomalyObjectives({ traits, detectedTraits }: AnomalyObjectivesProps) {
+export function AnomalyObjectives({ traits = [], detectedTraits = [] }: AnomalyObjectivesProps) {
+  const safeTraits = Array.isArray(traits) ? traits.filter(Boolean) : [];
+  const safeDetected = Array.isArray(detectedTraits) ? detectedTraits : [];
+
   return (
     <div className="p-6 rounded-lg bg-abyss border border-blood/50 w-full max-w-md mx-auto relative mt-6">
       <div className="flex items-center space-x-3 mb-6">
@@ -19,10 +22,11 @@ export function AnomalyObjectives({ traits, detectedTraits }: AnomalyObjectivesP
       </div>
       
       <ul className="space-y-4 mb-6">
-        {traits.map((trait) => {
-          const isDetected = detectedTraits.includes(trait.id);
+        {safeTraits.map((trait, index) => {
+          if (!trait || !trait.id) return null;
+          const isDetected = safeDetected.includes(trait.id);
           return (
-            <li key={trait.id} className="flex items-start space-x-3">
+            <li key={trait.id || index} className="flex items-start space-x-3">
               <div className="mt-1 flex-shrink-0">
                 {isDetected ? (
                   <CheckCircle2 className="w-5 h-5 text-safe drop-shadow-[0_0_5px_rgba(0,255,0,0.8)]" />
@@ -34,10 +38,19 @@ export function AnomalyObjectives({ traits, detectedTraits }: AnomalyObjectivesP
                 <p className={`font-mono text-sm sm:text-base transition-colors duration-500 ${isDetected ? 'text-safe line-through opacity-70' : 'text-bone'}`}>
                   {trait.display}
                 </p>
-                <div className="mt-1">
+                <div className="mt-1 flex items-center space-x-2">
                   <span className="inline-block px-2 py-0.5 text-[10px] uppercase font-mono tracking-wider bg-void text-ash border border-eerie rounded">
                     {trait.category}
                   </span>
+                  {trait.difficulty && (
+                    <span className={`inline-block px-2 py-0.5 text-[10px] uppercase font-mono tracking-wider rounded ${
+                      trait.difficulty === 'easy' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40' :
+                      trait.difficulty === 'medium' ? 'bg-amber-950/60 text-amber-400 border border-amber-800/40' :
+                      'bg-blood/20 text-blood-bright border border-blood/40'
+                    }`}>
+                      {trait.difficulty}
+                    </span>
+                  )}
                 </div>
               </div>
             </li>

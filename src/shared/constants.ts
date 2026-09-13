@@ -1,20 +1,48 @@
 import type { MenuItem, AbilityItem, GameConfig } from "./types";
 
 // ============================================
-// Menu Items
+// Menu Items (Expanded Authentic Fast-Food Menu)
 // ============================================
 export const MENU_ITEMS: MenuItem[] = [
-  { id: "mcscreamer",  name: "McScreamer Burger", price: 5, emoji: "🍔" },
-  { id: "shadow-fries", name: "Shadow Fries",     price: 3, emoji: "🍟" },
-  { id: "cryptic-soda", name: "Cryptic Soda",     price: 2, emoji: "🥤" },
-  { id: "anomaly-nugs", name: "Anomaly Nuggets",  price: 4, emoji: "🍗" },
-  { id: "gloom-shake",  name: "Gloom Shake",      price: 4, emoji: "🥛" },
+  // Burgers
+  { id: "big-wc",          name: "Big Wc Double Burger",     price: 6, emoji: "🍔", category: "burgers", description: "Two 100% mystery patties, special sauce, lettuce, cheese, pickles." },
+  { id: "quarter-anomaly", name: "Quarter Pounder Anomaly",  price: 6, emoji: "🍔", category: "burgers", description: "Fresh unearthly beef, slivered onions, two slices of American cheese." },
+  { id: "mcscreamer",      name: "McScreamer Burger",        price: 5, emoji: "🍔", category: "burgers", description: "Classic spicy haunted burger with jalapeño screaming sauce." },
+  { id: "filet-o-fear",    name: "Filet-O-Fear Fish",        price: 5, emoji: "🐟", category: "burgers", description: "Wild-caught abyssal cod with tart-acid sauce on a steamed bun." },
+  { id: "shadow-cheese",   name: "Double Shadow Burger",     price: 4, emoji: "🍔", category: "burgers", description: "Melted void cheddar on twin seared phantom beef patties." },
+
+  // Chicken
+  { id: "anomaly-nugs",    name: "Anomaly Nuggets (6pc)",    price: 4, emoji: "🍗", category: "chicken", description: "Tender white meat breaded in crispy eldritch seasoning." },
+  { id: "ghost-tenders",   name: "Ghost Pepper Tenders",     price: 5, emoji: "🌶️", category: "chicken", description: "Extremely spicy battered strips that burn like brimstone." },
+  { id: "cursed-mcchicken",name: "Cursed McChicken",         price: 4, emoji: "🥪", category: "chicken", description: "Crispy chicken patty topped with shredded iceberg and void mayo." },
+
+  // Sides
+  { id: "shadow-fries",    name: "Large Shadow Fries",       price: 3, emoji: "🍟", category: "sides",   description: "World-famous fries cooked in dark oil, golden and steaming." },
+  { id: "sorrow-rings",    name: "Onion Rings of Sorrow",    price: 3, emoji: "🧅", category: "sides",   description: "Deep-fried thick cut sweet onions battered in agony." },
+  { id: "hash-brown",      name: "Hash Brown of the Damned", price: 2, emoji: "🥔", category: "sides",   description: "Shredded potato patty fried to a blistered crunch." },
+
+  // Beverages
+  { id: "cryptic-soda",    name: "Cryptic Fountain Soda",    price: 2, emoji: "🥤", category: "drinks",  description: "Fizzy black-currant soda served ice cold in a wax cup." },
+  { id: "gloom-shake",     name: "Gloom Milkshake",          price: 4, emoji: "🥛", category: "drinks",  description: "Thick soft-serve blend with purple dark-matter syrup." },
+  { id: "grimace-potion",  name: "Grimace's Secret Potion",  price: 4, emoji: "🧪", category: "drinks",  description: "Mysterious purple elixir that whispers when you sip." },
+  { id: "abyss-coffee",    name: "Dark Abyss Roast Coffee",  price: 2, emoji: "☕", category: "drinks",  description: "Freshly brewed boiling pitch-black coffee to stay awake." },
+
+  // Desserts
+  { id: "doom-pie",        name: "Baked Apple Pie of Doom",  price: 2, emoji: "🥧", category: "desserts",description: "Turnover pie with bubbling molten apple filling in crispy crust." },
+  { id: "void-mcflurry",   name: "Void Oreo McFlurry",       price: 4, emoji: "🍨", category: "desserts",description: "Crushed cookies churned into thick cold dairy darkness." },
 ];
 
 // ============================================
-// Ability Shop
+// Ability Shop (Black Market)
 // ============================================
 export const ABILITY_ITEMS: AbilityItem[] = [
+  {
+    id: "extra-life",
+    name: "Sanity Restoration (+1 Life)",
+    description: "Emergency adrenaline injection. Restores 1 lost life (max 5 lives).",
+    price: 350,
+    emoji: "❤️",
+  },
   {
     id: "uv-scanner",
     name: "UV Scanner Filter",
@@ -38,6 +66,8 @@ export const ABILITY_ITEMS: AbilityItem[] = [
     duration: 3,
   },
 ];
+
+export const BLOOD_MOON_CHANCE = 0.30; // 30% chance for a Red Night Moon
 
 // ============================================
 // Game Config Defaults
@@ -121,12 +151,42 @@ export function setPartyKitHost(host: string): void {
 export const PARTYKIT_HOST: string = getPartyKitHost();
 
 // ============================================
-// Random Order Generator
+// Random Order Generator (Realistic Combos)
 // ============================================
 export function generateRandomOrder(): MenuItem[] {
-  const count = 2 + Math.floor(Math.random() * 3); // 2-4 items
-  const shuffled = [...MENU_ITEMS].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  const mains = MENU_ITEMS.filter((i) => i.category === "burgers" || i.category === "chicken");
+  const sides = MENU_ITEMS.filter((i) => i.category === "sides");
+  const drinks = MENU_ITEMS.filter((i) => i.category === "drinks");
+  const desserts = MENU_ITEMS.filter((i) => i.category === "desserts");
+
+  const roll = Math.random();
+  const order: MenuItem[] = [];
+
+  if (roll < 0.55) {
+    // Classic Combo Meal: 1 Main + 1 Side + 1 Drink (+ 35% chance dessert)
+    order.push(mains[Math.floor(Math.random() * mains.length)]);
+    order.push(sides[Math.floor(Math.random() * sides.length)]);
+    order.push(drinks[Math.floor(Math.random() * drinks.length)]);
+    if (Math.random() < 0.35) {
+      order.push(desserts[Math.floor(Math.random() * desserts.length)]);
+    }
+  } else if (roll < 0.85) {
+    // Feast Order: 2 Mains + 1-2 Sides + 1 Drink
+    order.push(mains[Math.floor(Math.random() * mains.length)]);
+    order.push(mains[Math.floor(Math.random() * mains.length)]);
+    order.push(sides[Math.floor(Math.random() * sides.length)]);
+    if (Math.random() < 0.5) {
+      order.push(sides[Math.floor(Math.random() * sides.length)]);
+    }
+    order.push(drinks[Math.floor(Math.random() * drinks.length)]);
+  } else {
+    // Late Night Snack: 1 Side + 1 Drink + 1 Dessert
+    order.push(sides[Math.floor(Math.random() * sides.length)]);
+    order.push(drinks[Math.floor(Math.random() * drinks.length)]);
+    order.push(desserts[Math.floor(Math.random() * desserts.length)]);
+  }
+
+  return order.filter(Boolean);
 }
 
 // ============================================
