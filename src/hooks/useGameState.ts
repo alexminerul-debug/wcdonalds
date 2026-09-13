@@ -88,7 +88,7 @@ export function useGameState(socket: PartySocket | null) {
                   fallbackItems.reduce((s, i) => s + (i.menuItem?.price || 5), 0) || 5.0;
                 return { total: fallbackTotal, items: fallbackItems };
               });
-            } else {
+            } else if (msg.state.currentTurn?.phase === 'resolved' || msg.state.currentTurn?.phase === 'deciding') {
               setPaymentRequest(null);
             }
             const currentMyId = myIdRef.current;
@@ -128,6 +128,24 @@ export function useGameState(socket: PartySocket | null) {
             
           case 'payment-request':
             setPaymentRequest({ total: msg.total, items: msg.items });
+            setCurrentTurn((prev) =>
+              prev
+                ? { ...prev, phase: 'payment', paymentRequest: { total: msg.total, items: msg.items } }
+                : {
+                    playerId: myIdRef.current || 'customer',
+                    playerName: 'Customer',
+                    secretRole: 'normal',
+                    assignedOrder: (msg.items || []).map((i) => i.menuItem),
+                    anomalyTraits: null,
+                    detectedTraits: [],
+                    queuePosition: 1,
+                    totalCustomers: 1,
+                    startedAt: Date.now(),
+                    phase: 'payment',
+                    result: null,
+                    paymentRequest: { total: msg.total, items: msg.items },
+                  }
+            );
             break;
             
           case 'payment-received':

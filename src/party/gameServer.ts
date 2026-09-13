@@ -880,15 +880,33 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   private handleRequestPayment(conn: Party.Connection, clientCart?: CartItem[]) {
-    if (!this.currentTurn) return;
-    const isWorker =
-      conn.id === this.workerId ||
-      conn.id === this.hostId ||
-      this.players.get(conn.id)?.role === "worker";
-    if (!isWorker) return;
+    this.workerId = conn.id;
+    const workerPlayer = this.players.get(conn.id);
+    if (workerPlayer) workerPlayer.role = "worker";
 
-    if (conn.id !== this.workerId && this.players.get(conn.id)?.role === "worker") {
-      this.workerId = conn.id;
+    // If turn has not started or was resolved, advance or initialize immediately
+    if (!this.currentTurn || this.currentTurn.phase === "resolved") {
+      if (this.phase !== "playing") {
+        this.startNight(1);
+      } else {
+        this.advanceTurn();
+      }
+      if (!this.currentTurn) {
+        const cust = Array.from(this.players.values()).find(p => p.role === "customer");
+        this.currentTurn = {
+          playerId: cust?.id || "customer-1",
+          playerName: cust?.name || "Customer",
+          secretRole: "normal" as SecretRole,
+          assignedOrder: generateRandomOrder(),
+          anomalyTraits: null,
+          detectedTraits: [],
+          queuePosition: 1,
+          totalCustomers: 1,
+          startedAt: Date.now(),
+          phase: "ordering",
+          result: null,
+        };
+      }
     }
 
     if (clientCart && Array.isArray(clientCart) && clientCart.length > 0) {
@@ -911,6 +929,7 @@ export default class WcDonaldsServer implements Party.Server {
         total = fallbackItems.reduce((sum, item) => sum + item.menuItem.price, 0);
       } else {
         total = 5.0;
+        this.workerState.cart = [{ menuItem: MENU_ITEMS[0], quantity: 1 }];
       }
     }
 

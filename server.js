@@ -334,14 +334,42 @@ class GameRoom {
       }
 
       case "request-payment": {
-        if (!this.currentTurn) break;
+        this.workerId = id;
+        const workerPlayer = this.players.get(id);
+        if (workerPlayer) workerPlayer.role = "worker";
+
+        // If turn has not started or was resolved, advance or initialize immediately
+        if (!this.currentTurn || this.currentTurn.phase === "resolved") {
+          if (this.phase !== "playing") {
+            this.startNight(1);
+          } else {
+            this.advanceTurn();
+          }
+          if (!this.currentTurn) {
+            const cust = Array.from(this.players.values()).find((p) => p.role === "customer");
+            this.currentTurn = {
+              playerId: cust?.id || "customer-1",
+              playerName: cust?.name || "Customer",
+              secretRole: "normal",
+              assignedOrder: generateRandomOrder(),
+              anomalyTraits: null,
+              detectedTraits: [],
+              queuePosition: 1,
+              totalCustomers: 1,
+              startedAt: Date.now(),
+              phase: "ordering",
+              result: null,
+            };
+          }
+        }
+
         if (msg.cart && Array.isArray(msg.cart) && msg.cart.length > 0) {
           this.workerState.cart = msg.cart;
         }
 
         let total = this.workerState.cart.reduce((s, i) => s + (i.menuItem?.price || 0) * (i.quantity || 1), 0);
         if (total <= 0 || this.workerState.cart.length === 0) {
-          const fallback = (this.currentTurn.assignedOrder || []).map((item) => ({
+          const fallback = (this.currentTurn?.assignedOrder || []).map((item) => ({
             menuItem: item,
             quantity: 1,
           }));
@@ -350,6 +378,7 @@ class GameRoom {
             total = fallback.reduce((s, i) => s + i.menuItem.price, 0);
           } else {
             total = 5.0;
+            this.workerState.cart = [{ menuItem: MENU_ITEMS[0], quantity: 1 }];
           }
         }
 
