@@ -271,16 +271,42 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- Connection Handlers ----------
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
+    // If reconnecting player had a role, restore it
+    const existing = this.players.get(conn.id);
+    if (existing) {
+      if (existing.role === "worker") this.workerId = conn.id;
+      if (existing.role === "camera") this.cameraId = conn.id;
+    }
+
     // Send welcome with connection ID and current state
     sendTo(conn, { type: "welcome", connectionId: conn.id });
     sendTo(conn, { type: "room-state", state: this.getPublicState(), selfId: conn.id });
+
+    // If shift is active, send secret role info immediately
+    if (this.phase === "playing") {
+      const secretRole = this.secretRoles.get(conn.id) || (this.currentTurn?.playerId === conn.id ? this.secretRoles.get(this.currentTurn.playerId) : "normal");
+      const order = this.secretOrders.get(conn.id) || (this.currentTurn?.playerId === conn.id ? this.secretOrders.get(this.currentTurn.playerId) : generateRandomOrder());
+      const traits = this.secretTraits.get(conn.id) || (this.currentTurn?.playerId === conn.id ? this.secretTraits.get(this.currentTurn.playerId) : null);
+
+      sendTo(conn, {
+        type: "secret-role",
+        secretRole: secretRole || "normal",
+        order: order || generateRandomOrder(),
+        traits: traits || null,
+      });
+    }
   }
 
   onClose(conn: Party.Connection) {
     const player = this.players.get(conn.id);
     if (!player) return;
 
-    // Clean up role assignments
+    // During active shift, do not immediately destroy player state to survive route navigation
+    if (this.phase === "playing") {
+      return;
+    }
+
+    // Clean up role assignments in lobby
     if (this.workerId === conn.id) this.workerId = null;
     if (this.cameraId === conn.id) this.cameraId = null;
 
@@ -364,12 +390,17 @@ export default class WcDonaldsServer implements Party.Server {
       case "webrtc-signal":
         this.handleWebRTCSignal(sender, msg.targetId, msg.signal);
         break;
+      case "camera-ready": {
+        this.cameraId = sender.id;
+        this.room.broadcast(JSON.stringify({ type: "camera-ready" }));
+        break;
+      }
       case "viewer-join": {
         // Forward viewer join to camera
         if (this.cameraId) {
           const camConn = this.room.getConnection(this.cameraId);
           if (camConn) {
-            sendTo(camConn, { type: "viewer-join", viewerId: sender.id });
+            sendTo(camConn, { type: "viewer-join", viewerId: msg.viewerId || sender.id });
           }
         }
         break;
@@ -389,12 +420,13 @@ export default class WcDonaldsServer implements Party.Server {
       }
       case "cctv-frame": {
         // Fallback base64 frames: forward to worker
-        if (this.workerId && sender.id === this.cameraId) {
+        if (this.workerId) {
           const workerConn = this.room.getConnection(this.workerId);
           if (workerConn) {
             sendTo(workerConn, { type: "cctv-frame", frame: msg.frame });
           }
         }
+        this.room.broadcast(JSON.stringify({ type: "cctv-frame", frame: msg.frame }), [sender.id, this.workerId || ""]);
         break;
       }
     }
@@ -402,12 +434,28 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- Lobby Handlers ----------
   private handleJoinRoom(conn: Party.Connection, name: string) {
-    if (this.players.size >= this.config.maxPlayers) {
-      sendTo(conn, { type: "error", message: "Room is full (max 10 players)" });
+    const existing = this.players.get(conn.id);
+    if (existing) {
+      existing.name = name.slice(0, 20) || existing.name;
+      this.broadcastState();
       return;
     }
+
     if (this.phase !== "lobby") {
-      sendTo(conn, { type: "error", message: "Game already in progress" });
+      const player: PlayerInfo = {
+        id: conn.id,
+        name: name.slice(0, 20) || `Player ${this.players.size + 1}`,
+        role: "unassigned",
+        isHost: this.players.size === 0,
+        joinedAt: Date.now(),
+      };
+      this.players.set(conn.id, player);
+      this.broadcastState();
+      return;
+    }
+
+    if (this.players.size >= this.config.maxPlayers) {
+      sendTo(conn, { type: "error", message: "Room is full (max 10 players)" });
       return;
     }
 
@@ -426,9 +474,18 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   private handleClaimRole(conn: Party.Connection, role: string) {
-    if (this.phase !== "lobby") return;
-    const player = this.players.get(conn.id);
-    if (!player) return;
+    let player = this.players.get(conn.id);
+    if (!player) {
+      player = {
+        id: conn.id,
+        name: role === "worker" ? "Worker" : role === "camera" ? "CCTV Camera" : "Customer",
+        role: "unassigned",
+        isHost: this.players.size === 0,
+        joinedAt: Date.now(),
+      };
+      this.players.set(conn.id, player);
+      if (this.players.size === 1) this.hostId = conn.id;
+    }
 
     // Unclaim previous role
     if (player.role === "worker") this.workerId = null;
@@ -436,35 +493,36 @@ export default class WcDonaldsServer implements Party.Server {
 
     switch (role) {
       case "worker":
-        if (this.workerId && this.workerId !== conn.id) {
-          sendTo(conn, { type: "error", message: "Worker role already taken" });
-          return;
-        }
         this.workerId = conn.id;
         player.role = "worker";
         break;
       case "camera":
-        if (this.cameraId && this.cameraId !== conn.id) {
-          sendTo(conn, { type: "error", message: "Camera role already taken" });
-          return;
-        }
         this.cameraId = conn.id;
         player.role = "camera";
         break;
       case "customer":
         player.role = "customer";
+        if (!this.customerQueue.includes(conn.id)) {
+          this.customerQueue.push(conn.id);
+        }
+        if (this.phase === "playing") {
+          if (!this.secretRoles.has(conn.id)) {
+            this.secretRoles.set(conn.id, "normal");
+            this.secretOrders.set(conn.id, generateRandomOrder());
+          }
+          sendTo(conn, {
+            type: "secret-role",
+            secretRole: this.secretRoles.get(conn.id) || "normal",
+            order: this.secretOrders.get(conn.id) || generateRandomOrder(),
+            traits: this.secretTraits.get(conn.id) || null,
+          });
+        }
         break;
       default:
         player.role = "unassigned";
     }
 
-    this.room.broadcast(
-      JSON.stringify({
-        type: "role-assigned",
-        role: player.role,
-        playerId: conn.id,
-      } as ServerMessage)
-    );
+    this.room.broadcast(JSON.stringify({ type: "role-assigned", role: player.role, playerId: conn.id }));
     this.broadcastState();
   }
 

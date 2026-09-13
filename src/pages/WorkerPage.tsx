@@ -27,9 +27,38 @@ export default function WorkerPage() {
   const [nightVisionOn, setNightVisionOn] = useState(false);
   const [showJumpscare, setShowJumpscare] = useState(false);
 
+  // Auto-register as Worker on mount / connect
+  useEffect(() => {
+    if (socket) {
+      const savedName =
+        (typeof window !== 'undefined' &&
+          sessionStorage.getItem('wcd_player_name')) ||
+        'Worker';
+      sendMessage({ type: 'join-room', name: savedName });
+      sendMessage({ type: 'claim-role', role: 'worker' });
+    }
+  }, [socket, sendMessage]);
+
   useEffect(() => {
     startViewing();
   }, [startViewing]);
+
+  // Listen for camera-ready message to reconnect feed if camera came online after worker
+  useEffect(() => {
+    if (!socket) return;
+    const handleCameraReady = (event: MessageEvent) => {
+      try {
+        if (typeof event.data === 'string') {
+          const data = JSON.parse(event.data);
+          if (data.type === 'camera-ready') {
+            startViewing();
+          }
+        }
+      } catch {}
+    };
+    socket.addEventListener('message', handleCameraReady);
+    return () => socket.removeEventListener('message', handleCameraReady);
+  }, [socket, startViewing]);
 
   useEffect(() => {
     if (currentTurn?.result?.type === 'served_anomaly') {

@@ -22,7 +22,9 @@ import { ServerSettingsModal } from "@/components/ui/ServerSettingsModal";
 export default function LobbyPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const [playerName, setPlayerName] = useState("");
+  const [playerName, setPlayerName] = useState(() => {
+    return (typeof window !== "undefined" && sessionStorage.getItem("wcd_player_name")) || "";
+  });
   const [hasJoined, setHasJoined] = useState(false);
   const [copied, setCopied] = useState(false);
   const [serverModalOpen, setServerModalOpen] = useState(false);
@@ -45,12 +47,19 @@ export default function LobbyPage() {
   }, [gameState?.phase, myRole, code, navigate]);
 
   const handleJoin = () => {
-    if (!playerName.trim()) return;
-    sendMessage({ type: "join-room", name: playerName.trim() });
+    const trimmed = playerName.trim();
+    if (!trimmed) return;
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("wcd_player_name", trimmed);
+    }
+    sendMessage({ type: "join-room", name: trimmed });
     setHasJoined(true);
   };
 
   const handleClaimRole = (role: PlayerRole) => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("wcd_player_role", role);
+    }
     sendMessage({ type: "claim-role", role });
   };
 

@@ -22,32 +22,46 @@ export class HybridStreamManager {
     this.viewerId = viewerId;
   }
 
+  private webrtcConnected = false;
+
   public start() {
+    // Start canvas fallback receiver immediately so any arriving frames display with zero delay
+    this.canvasViewer = new CanvasSnapshotViewer(this.canvasElement, this.socket);
+    this.canvasViewer.onFrameReceived = () => {
+      if (!this.webrtcConnected && this.mode !== "canvas") {
+        this.setMode("canvas");
+      }
+    };
+
     this.attemptWebRTC();
   }
 
   private attemptWebRTC() {
-    this.setMode("webrtc");
     this.webrtcViewer = new ViewerReceiver(this.socket, this.videoElement, this.viewerId);
     
     this.webrtcViewer.onConnectionStateChange = (state) => {
-      if (state === "failed" || state === "disconnected") {
-        this.switchToFallback();
-      } else if (state === "connected") {
+      if (state === "connected") {
+        this.webrtcConnected = true;
         if (this.timeoutId) {
           clearTimeout(this.timeoutId);
           this.timeoutId = null;
         }
+        this.setMode("webrtc");
+      } else if (state === "failed" || state === "disconnected") {
+        this.webrtcConnected = false;
+        this.switchToFallback();
       }
     };
 
     this.timeoutId = window.setTimeout(() => {
-      console.warn("WebRTC connection timed out, switching to fallback");
-      this.switchToFallback();
-    }, 6000);
+      if (!this.webrtcConnected) {
+        this.switchToFallback();
+      }
+    }, 4000);
   }
 
   private switchToFallback() {
+    this.webrtcConnected = false;
     if (this.webrtcViewer) {
       this.webrtcViewer.disconnect();
       this.webrtcViewer = null;
@@ -57,7 +71,9 @@ export class HybridStreamManager {
       this.timeoutId = null;
     }
     this.setMode("canvas");
-    this.canvasViewer = new CanvasSnapshotViewer(this.canvasElement, this.socket);
+    if (!this.canvasViewer) {
+      this.canvasViewer = new CanvasSnapshotViewer(this.canvasElement, this.socket);
+    }
   }
 
   public stop() {

@@ -67,6 +67,8 @@ export function useWebRTC(
         if (typeof event.data === 'string') {
           const msg = JSON.parse(event.data) as ServerMessage;
           if (msg.type === 'cctv-frame' && msg.frame && canvasRef.current) {
+            setConnectionMode('canvas');
+            setIsConnected(true);
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
             const img = new Image();

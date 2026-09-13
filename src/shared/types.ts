@@ -141,6 +141,7 @@ export type ClientMessage =
   | { type: "offer"; viewerId: string; sdp: unknown }
   | { type: "answer"; viewerId: string; sdp: unknown }
   | { type: "ice-candidate"; viewerId: string; candidate: unknown }
+  | { type: "camera-ready" }
   | { type: "webrtc-signal"; targetId: string; signal: unknown };
 
 // ---------- Server → Client ----------

@@ -125,6 +125,9 @@ export default function CameraPage() {
           const fallback = new CanvasSnapshotBroadcaster(videoRef.current, socket, 10);
           fallback.start();
           fallbackBroadcasterRef.current = fallback;
+
+          // Announce camera ready to worker
+          sendMessage({ type: "camera-ready" });
         }
       }
     } catch (playErr) {
@@ -153,12 +156,13 @@ export default function CameraPage() {
     };
   }, [socket]);
 
-  // Claim camera role on socket
+  // Join room and claim camera role on socket
   useEffect(() => {
-    if (socket) {
+    if (socket && connectionStatus === "connected") {
+      sendMessage({ type: "join-room", name: "CCTV Camera" });
       sendMessage({ type: "claim-role", role: "camera" });
     }
-  }, [socket, sendMessage]);
+  }, [socket, connectionStatus, sendMessage]);
 
   // Send snapshots for AI analysis
   const handleSnapshot = useCallback(

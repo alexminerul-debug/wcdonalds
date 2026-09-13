@@ -37,6 +37,18 @@ export default function CustomerPage() {
     lastResult,
   } = useGameState(socket);
 
+  // Ensure Customer registers identity and claims role on mount/reconnect
+  useEffect(() => {
+    if (connectionStatus === "connected") {
+      const savedName =
+        (typeof window !== "undefined" &&
+          sessionStorage.getItem("wcd_player_name")) ||
+        "Customer";
+      sendMessage({ type: "join-room", name: savedName });
+      sendMessage({ type: "claim-role", role: "customer" });
+    }
+  }, [connectionStatus, sendMessage]);
+
   // When a new turn starts for this player, show role card
   useEffect(() => {
     if (
@@ -77,9 +89,16 @@ export default function CustomerPage() {
     );
   }
 
-  const queuePosition = gameState.customerQueue.indexOf(myId) + 1;
-  const totalQueue = gameState.customerQueue.length;
+  const queueIndex = (gameState?.customerQueue || []).indexOf(myId);
+  const queuePosition = queueIndex >= 0 ? queueIndex + 1 : 1;
+  const totalQueue = Math.max((gameState?.customerQueue || []).length, 1);
   const isAnomaly = secretRole === "anomaly";
+
+  // Fallback order so screen is never blank if server order hasn't arrived yet
+  const itemsToDisplay =
+    secretOrder && secretOrder.length > 0
+      ? secretOrder
+      : [MENU_ITEMS[0], MENU_ITEMS[1]];
 
   // ---- GAME OVER ----
   if (gameState.phase === "game_over") {
@@ -148,21 +167,33 @@ export default function CustomerPage() {
         </div>
 
         {/* Role reveal overlay */}
-        {showRoleCard && secretRole && (
+        {showRoleCard && (
           <SecretRoleCard
-            role={secretRole}
+            role={secretRole || "normal"}
             onDismiss={() => setShowRoleCard(false)}
           />
         )}
 
         {/* Main content (after role card dismissed) */}
-        {!showRoleCard && secretOrder && (
+        {!showRoleCard && (
           <div className="p-6 pb-24 min-h-screen space-y-6">
-            <OrderDisplay items={secretOrder} isAnomaly={isAnomaly} />
+            <OrderDisplay items={itemsToDisplay} isAnomaly={isAnomaly} />
 
-            {isAnomaly && secretTraits && (
+            {isAnomaly && (
               <AnomalyObjectives
-                traits={secretTraits}
+                traits={
+                  secretTraits && secretTraits.length > 0
+                    ? secretTraits
+                    : [
+                        {
+                          id: "unnatural-grin",
+                          display:
+                            "Maintain an unnaturally wide grin when staring at the camera",
+                          category: "facial",
+                          aiPrompt: "Unnatural grin",
+                        },
+                      ]
+                }
                 detectedTraits={detectedTraits}
               />
             )}

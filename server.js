@@ -73,6 +73,7 @@ class GameRoom {
     this.secretRoles = new Map();
     this.secretTraits = new Map();
     this.secretOrders = new Map();
+    this.disconnectTimers = new Map();
   }
 
   getPublicState() {
@@ -83,10 +84,12 @@ class GameRoom {
       players: Array.from(this.players.values()),
       workerId: this.workerId,
       cameraId: this.cameraId,
+      customerQueue: this.customerQueue || [],
+      currentTurnIndex: this.currentTurnIndex,
       currentTurn: this.currentTurn,
       workerState: this.workerState,
-      customerQueueLength: this.customerQueue.length - (this.currentTurnIndex + 1),
-      queuePosition: this.currentTurnIndex,
+      roundResults: this.roundResults || [],
+      config: { maxPlayers: 10, anomalyProbability: 0.35, minAnomalies: 1, maxAnomalyRatio: 0.5, turnTimeLimit: 0, startingLives: 3, startingBalance: 0 },
     };
   }
 
@@ -105,11 +108,38 @@ class GameRoom {
   }
 
   addConnection(id, ws) {
+    // Clear any pending disconnect timer for this player ID
+    if (this.disconnectTimers.has(id)) {
+      clearTimeout(this.disconnectTimers.get(id));
+      this.disconnectTimers.delete(id);
+    }
+
     this.connections.set(id, ws);
+
+    // If reconnecting player had a role, restore it
+    const existing = this.players.get(id);
+    if (existing) {
+      if (existing.role === "worker") this.workerId = id;
+      if (existing.role === "camera") this.cameraId = id;
+    }
 
     // Send welcome and state
     ws.send(JSON.stringify({ type: "welcome", connectionId: id }));
     ws.send(JSON.stringify({ type: "room-state", state: this.getPublicState(), selfId: id }));
+
+    // If shift is active, send secret role info immediately
+    if (this.phase === "playing") {
+      const secretRole = this.secretRoles.get(id) || (this.currentTurn?.playerId === id ? this.secretRoles.get(this.currentTurn.playerId) : "normal");
+      const order = this.secretOrders.get(id) || (this.currentTurn?.playerId === id ? this.secretOrders.get(this.currentTurn.playerId) : generateRandomOrder());
+      const traits = this.secretTraits.get(id) || (this.currentTurn?.playerId === id ? this.secretTraits.get(this.currentTurn.playerId) : null);
+
+      ws.send(JSON.stringify({
+        type: "secret-role",
+        secretRole: secretRole || "normal",
+        order: order || generateRandomOrder(),
+        traits: traits || null,
+      }));
+    }
 
     ws.on("message", (raw) => this.handleMessage(id, raw));
     ws.on("close", () => this.removeConnection(id));
@@ -117,19 +147,28 @@ class GameRoom {
 
   removeConnection(id) {
     this.connections.delete(id);
-    if (this.workerId === id) this.workerId = null;
-    if (this.cameraId === id) this.cameraId = null;
-    this.players.delete(id);
 
-    if (this.hostId === id) {
-      const remaining = Array.from(this.players.values());
-      if (remaining.length > 0) {
-        this.hostId = remaining[0].id;
-        remaining[0].isHost = true;
+    // Grace timer: don't immediately wipe out player during page transitions or temporary drops
+    const timer = setTimeout(() => {
+      if (!this.connections.has(id)) {
+        if (this.workerId === id) this.workerId = null;
+        if (this.cameraId === id) this.cameraId = null;
+        this.players.delete(id);
+
+        if (this.hostId === id) {
+          const remaining = Array.from(this.players.values());
+          if (remaining.length > 0) {
+            this.hostId = remaining[0].id;
+            remaining[0].isHost = true;
+          }
+        }
+
+        this.broadcastState();
       }
-    }
+      this.disconnectTimers.delete(id);
+    }, 25000);
 
-    this.broadcastState();
+    this.disconnectTimers.set(id, timer);
   }
 
   handleMessage(id, raw) {
@@ -140,13 +179,16 @@ class GameRoom {
 
     // Handle binary video fallback stream
     if (Buffer.isBuffer(raw) && raw.length > 0 && raw[0] !== 123 /* not '{' */) {
-      if (this.workerId && id === this.cameraId) {
+      if (this.workerId) {
         const workerWs = this.connections.get(this.workerId);
         if (workerWs && workerWs.readyState === WebSocket.OPEN) {
           workerWs.send(raw);
         }
-      } else {
-        this.broadcast(raw, id);
+      }
+      for (const [connId, clientWs] of this.connections.entries()) {
+        if (connId !== id && connId !== this.workerId && clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(raw);
+        }
       }
       return;
     }
@@ -175,8 +217,19 @@ class GameRoom {
       }
 
       case "claim-role": {
-        const player = this.players.get(id);
-        if (!player) return;
+        let player = this.players.get(id);
+        if (!player) {
+          player = {
+            id,
+            name: msg.role === "worker" ? "Worker" : msg.role === "camera" ? "CCTV Camera" : "Customer",
+            role: "unassigned",
+            isHost: this.players.size === 0,
+            joinedAt: Date.now(),
+          };
+          this.players.set(id, player);
+          if (this.players.size === 1) this.hostId = id;
+        }
+
         if (player.role === "worker") this.workerId = null;
         if (player.role === "camera") this.cameraId = null;
 
@@ -188,6 +241,24 @@ class GameRoom {
           player.role = "camera";
         } else if (msg.role === "customer") {
           player.role = "customer";
+          if (!this.customerQueue.includes(id)) {
+            this.customerQueue.push(id);
+          }
+          if (this.phase === "playing") {
+            if (!this.secretRoles.has(id)) {
+              this.secretRoles.set(id, "normal");
+              this.secretOrders.set(id, generateRandomOrder());
+            }
+            const clientWs = this.connections.get(id);
+            if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(JSON.stringify({
+                type: "secret-role",
+                secretRole: this.secretRoles.get(id) || "normal",
+                order: this.secretOrders.get(id) || generateRandomOrder(),
+                traits: this.secretTraits.get(id) || null,
+              }));
+            }
+          }
         } else {
           player.role = "unassigned";
         }
@@ -316,11 +387,17 @@ class GameRoom {
       }
 
       // WebRTC and fallback routing
+      case "camera-ready": {
+        this.cameraId = id;
+        this.broadcast({ type: "camera-ready" });
+        break;
+      }
+
       case "viewer-join": {
         if (this.cameraId) {
           const cam = this.connections.get(this.cameraId);
           if (cam && cam.readyState === WebSocket.OPEN) {
-            cam.send(JSON.stringify({ type: "viewer-join", viewerId: id }));
+            cam.send(JSON.stringify({ type: "viewer-join", viewerId: msg.viewerId || id }));
           }
         }
         break;
@@ -340,10 +417,15 @@ class GameRoom {
       }
 
       case "cctv-frame": {
-        if (this.workerId && id === this.cameraId) {
+        if (this.workerId) {
           const worker = this.connections.get(this.workerId);
           if (worker && worker.readyState === WebSocket.OPEN) {
             worker.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame }));
+          }
+        }
+        for (const [connId, client] of this.connections.entries()) {
+          if (connId !== id && connId !== this.workerId && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame }));
           }
         }
         break;
@@ -414,20 +496,21 @@ server.on("upgrade", (req, socket, head) => {
   // Match /party/WCD-XXXX or /parties/main/WCD-XXXX
   const match = url.pathname.match(/\/(?:party|parties\/main)\/([^/]+)/);
   const roomCode = match ? match[1] : url.searchParams.get("room") || "WCD-ROOM";
+  const connId = url.searchParams.get("_pk") || url.searchParams.get("id") || randomUUID();
 
   wss.handleUpgrade(req, socket, head, (ws) => {
-    wss.emit("connection", ws, req, roomCode);
+    wss.emit("connection", ws, req, roomCode, connId);
   });
 });
 
-wss.on("connection", (ws, req, roomCode) => {
+wss.on("connection", (ws, req, roomCode, customConnId) => {
   let room = rooms.get(roomCode);
   if (!room) {
     room = new GameRoom(roomCode);
     rooms.set(roomCode, room);
   }
 
-  const connId = randomUUID();
+  const connId = customConnId || randomUUID();
   room.addConnection(connId, ws);
 
   ws.on("close", () => {
