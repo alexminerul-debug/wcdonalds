@@ -9,8 +9,8 @@ export default function App() {
   return (
     <>
       {/* Subtle scanline overlay on all screens */}
-      <div className="scanline-overlay" />
-      <div className="scanline-moving" />
+      <div className="scanline-overlay pointer-events-none select-none" />
+      <div className="scanline-moving pointer-events-none select-none" />
 
       <Routes>
         <Route path="/" element={<LandingPage />} />

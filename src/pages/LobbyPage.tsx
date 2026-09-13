@@ -93,10 +93,11 @@ export default function LobbyPage() {
                        focus:outline-none focus:border-amber-glow transition-all"
           />
           <button
+            type="button"
             onClick={handleJoin}
             disabled={!playerName.trim()}
             className="w-full bg-blood/20 border border-blood text-blood-bright
-                       px-8 py-4 text-lg uppercase tracking-wider font-bold
+                       px-8 py-4 text-lg uppercase tracking-wider font-bold cursor-pointer
                        hover:bg-blood/40 transition-all duration-300
                        disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
           >
@@ -146,14 +147,15 @@ export default function LobbyPage() {
 
         {/* Worker */}
         <button
+          type="button"
           onClick={() => handleClaimRole("worker")}
           disabled={hasWorker && myRole !== "worker"}
           className={`w-full flex items-center gap-4 p-4 border transition-all duration-300 ${
             myRole === "worker"
-              ? "bg-amber-glow/15 border-amber-glow text-amber-glow"
+              ? "bg-amber-glow/15 border-amber-glow text-amber-glow cursor-pointer"
               : hasWorker
               ? "bg-void border-fog/10 text-fog/30 cursor-not-allowed"
-              : "bg-void border-fog/30 text-bone hover:border-amber-glow hover:bg-amber-glow/5"
+              : "bg-void border-fog/30 text-bone hover:border-amber-glow hover:bg-amber-glow/5 cursor-pointer"
           }`}
         >
           <Monitor className="w-8 h-8 flex-shrink-0" />
@@ -173,14 +175,15 @@ export default function LobbyPage() {
 
         {/* Camera */}
         <button
+          type="button"
           onClick={() => handleClaimRole("camera")}
           disabled={hasCamera && myRole !== "camera"}
           className={`w-full flex items-center gap-4 p-4 border transition-all duration-300 ${
             myRole === "camera"
-              ? "bg-eerie/15 border-eerie text-eerie"
+              ? "bg-eerie/15 border-eerie text-eerie cursor-pointer"
               : hasCamera
               ? "bg-void border-fog/10 text-fog/30 cursor-not-allowed"
-              : "bg-void border-fog/30 text-bone hover:border-eerie hover:bg-eerie/5"
+              : "bg-void border-fog/30 text-bone hover:border-eerie hover:bg-eerie/5 cursor-pointer"
           }`}
         >
           <Camera className="w-8 h-8 flex-shrink-0" />
@@ -200,8 +203,9 @@ export default function LobbyPage() {
 
         {/* Customer */}
         <button
+          type="button"
           onClick={() => handleClaimRole("customer")}
-          className={`w-full flex items-center gap-4 p-4 border transition-all duration-300 ${
+          className={`w-full flex items-center gap-4 p-4 border transition-all duration-300 cursor-pointer ${
             myRole === "customer"
               ? "bg-blood/15 border-blood text-blood-bright"
               : "bg-void border-fog/30 text-bone hover:border-blood hover:bg-blood/5"
@@ -260,12 +264,13 @@ export default function LobbyPage() {
       {isHost && (
         <div className="max-w-md mx-auto">
           <button
+            type="button"
             onClick={handleStartShift}
             disabled={!canStart}
             className={`w-full flex items-center justify-center gap-3 px-8 py-5 text-xl uppercase tracking-widest font-bold
                        transition-all duration-300 active:scale-95 ${
                          canStart
-                           ? "bg-blood/30 border-2 border-blood text-blood-bright hover:bg-blood/50 hover:shadow-[0_0_40px_rgba(220,20,60,0.3)] pulse-glow"
+                           ? "bg-blood/30 border-2 border-blood text-blood-bright hover:bg-blood/50 hover:shadow-[0_0_40px_rgba(220,20,60,0.3)] pulse-glow cursor-pointer"
                            : "bg-void border-2 border-fog/20 text-fog/30 cursor-not-allowed"
                        }`}
           >
