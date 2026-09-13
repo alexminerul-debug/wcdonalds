@@ -79,6 +79,13 @@ export function ServerSettingsModal({
         <div className="flex gap-2">
           <button
             type="button"
+            onClick={() => setHostInput("wcdonalds-production-3e0b.up.railway.app")}
+            className="text-[11px] px-2 py-1 bg-ash border border-amber-glow/40 text-amber-glow hover:bg-amber-glow/20 transition-colors cursor-pointer"
+          >
+            Railway Cloud (Default)
+          </button>
+          <button
+            type="button"
             onClick={handleResetLocal}
             className="text-[11px] px-2 py-1 bg-ash border border-fog/20 text-fog hover:text-bone transition-colors cursor-pointer"
           >

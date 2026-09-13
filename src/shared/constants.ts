@@ -110,7 +110,7 @@ export function getPartyKitHost(): string {
     return String(envHost).replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
   }
 
-  return "localhost:1999";
+  return "wcdonalds-production-3e0b.up.railway.app";
 }
 
 export function setPartyKitHost(host: string): void {
