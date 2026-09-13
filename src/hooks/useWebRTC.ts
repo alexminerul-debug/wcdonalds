@@ -23,7 +23,7 @@ export function useWebRTC(
     watchdogTimerRef.current = window.setTimeout(() => {
       setConnectionMode('disconnected');
       setIsConnected(false);
-    }, 4500);
+    }, 8000);
   }, []);
 
   const startBroadcasting = useCallback(async (): Promise<MediaStream | null> => {
@@ -31,7 +31,7 @@ export function useWebRTC(
 
     try {
       if (!broadcasterRef.current) {
-        const broadcaster = new CanvasSnapshotBroadcaster(videoRef.current, socket, 8);
+        const broadcaster = new CanvasSnapshotBroadcaster(videoRef.current, socket, 10);
         broadcaster.start();
         broadcasterRef.current = broadcaster;
       } else {
@@ -64,9 +64,23 @@ export function useWebRTC(
     };
 
     viewerRef.current = viewer;
+
+    // Notify room that a viewer joined so camera can emit a frame immediately
+    try {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'viewer-join', viewerId: socket.id }));
+      }
+    } catch {}
   }, [socket, canvasRef, resetWatchdog]);
 
-  // Update socket on viewer if socket instance changes
+  // Auto-initialize viewer as soon as socket and canvas are present
+  useEffect(() => {
+    if (role === 'viewer' && socket && canvasRef.current) {
+      startViewing();
+    }
+  }, [role, socket, canvasRef.current, startViewing]);
+
+  // Update socket on viewer / broadcaster if socket instance changes
   useEffect(() => {
     if (socket && viewerRef.current) {
       viewerRef.current.updateSocket(socket);

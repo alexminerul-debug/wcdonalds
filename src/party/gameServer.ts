@@ -386,7 +386,7 @@ export default class WcDonaldsServer implements Party.Server {
         this.handleClearCart(sender);
         break;
       case "request-payment":
-        this.handleRequestPayment(sender);
+        this.handleRequestPayment(sender, msg.cart);
         break;
       case "payment-complete":
         this.handlePaymentComplete(sender);
@@ -451,8 +451,11 @@ export default class WcDonaldsServer implements Party.Server {
             }
           }
         }
+        if (!targetWorkerConn && this.hostId) {
+          targetWorkerConn = this.room.getConnection(this.hostId) || null;
+        }
         if (targetWorkerConn) {
-          sendTo(targetWorkerConn, { type: "cctv-frame", frame: msg.frame });
+          sendTo(targetWorkerConn, { type: "cctv-frame", frame: msg.frame, ts: msg.ts || Date.now() });
         }
 
         // Also feed cctv frame to AI detection engine if anomaly turn is active (every 3.0s)
@@ -881,7 +884,7 @@ export default class WcDonaldsServer implements Party.Server {
     );
   }
 
-  private handleRequestPayment(conn: Party.Connection) {
+  private handleRequestPayment(conn: Party.Connection, clientCart?: CartItem[]) {
     if (!this.currentTurn) return;
     const isWorker =
       conn.id === this.workerId ||
@@ -893,10 +896,28 @@ export default class WcDonaldsServer implements Party.Server {
       this.workerId = conn.id;
     }
 
-    const total = this.workerState.cart.reduce(
-      (sum, item) => sum + item.menuItem.price * item.quantity,
+    if (clientCart && Array.isArray(clientCart) && clientCart.length > 0) {
+      this.workerState.cart = clientCart;
+    }
+
+    let total = this.workerState.cart.reduce(
+      (sum, item) => sum + (item.menuItem?.price || 0) * (item.quantity || 1),
       0
     );
+
+    // If cart is still empty or total is 0, synthesize from customer's assigned order
+    if (total <= 0 || this.workerState.cart.length === 0) {
+      const fallbackItems = (this.currentTurn.assignedOrder || []).map((item) => ({
+        menuItem: item,
+        quantity: 1,
+      }));
+      if (fallbackItems.length > 0) {
+        this.workerState.cart = fallbackItems;
+        total = fallbackItems.reduce((sum, item) => sum + item.menuItem.price, 0);
+      } else {
+        total = 5.0;
+      }
+    }
 
     this.currentTurn.phase = "payment";
     this.currentTurn.paymentRequest = { total, items: [...this.workerState.cart] };

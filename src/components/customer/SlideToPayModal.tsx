@@ -2,14 +2,15 @@ import React, { useState, useRef } from "react";
 import type { CartItem } from "@/shared/types";
 import { ChevronUp, CheckCircle, CreditCard, Zap } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { vibratePayment } from "@/lib/effects/haptics";
 
 interface SlideToPayModalProps {
-  total: number;
-  items: CartItem[];
+  total?: number;
+  items?: CartItem[];
   onPaymentComplete: () => void;
 }
 
-export function SlideToPayModal({ total, items, onPaymentComplete }: SlideToPayModalProps) {
+export function SlideToPayModal({ total = 0, items = [], onPaymentComplete }: SlideToPayModalProps) {
   const { t } = useTranslation();
   const [startY, setStartY] = useState<number | null>(null);
   const [currentY, setCurrentY] = useState<number | null>(null);
@@ -17,13 +18,24 @@ export function SlideToPayModal({ total, items, onPaymentComplete }: SlideToPayM
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const safeTotal = typeof total === "number" && !isNaN(total) && total > 0 ? total : 5.0;
+  const safeItems: CartItem[] = Array.isArray(items) && items.length > 0 ? items : [
+    {
+      menuItem: { id: "order_item", name: "WcMeal Order", price: safeTotal, emoji: "🍔" },
+      quantity: 1,
+    },
+  ];
+
   const triggerSuccess = () => {
     if (isSuccess) return;
     setIsSuccess(true);
-    // Short 250ms delay for visual feedback before dispatching payment
+    try {
+      vibratePayment();
+    } catch {}
+    // Short 200ms delay for visual feedback before dispatching payment
     setTimeout(() => {
       onPaymentComplete();
-    }, 250);
+    }, 200);
   };
 
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
@@ -40,7 +52,6 @@ export function SlideToPayModal({ total, items, onPaymentComplete }: SlideToPayM
     if (y <= startY) {
       setCurrentY(y);
       const dragDistance = startY - y;
-      // Responsive threshold: 120px or 25% of height for easy thumb sliding
       const threshold = containerRef.current
         ? Math.min(containerRef.current.clientHeight * 0.25, 120)
         : 120;
@@ -68,7 +79,7 @@ export function SlideToPayModal({ total, items, onPaymentComplete }: SlideToPayM
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 flex flex-col justify-between overflow-hidden touch-none select-none bg-void/95 backdrop-blur-sm transition-colors duration-200 p-4 pb-8"
+      className="fixed inset-0 z-[100] flex flex-col justify-between overflow-hidden touch-none select-none bg-void/95 backdrop-blur-sm transition-colors duration-200 p-4 pb-8"
       style={{
         backgroundColor: isSuccess ? "rgba(0,255,0,0.25)" : `rgba(0, 255, 0, ${progress * 0.15})`,
       }}
@@ -86,34 +97,41 @@ export function SlideToPayModal({ total, items, onPaymentComplete }: SlideToPayM
           {t("orderSummary")}
         </h2>
         <div className="text-4xl md:text-5xl font-mono font-bold text-safe tracking-tight">
-          ${total.toFixed(2)}
+          ${safeTotal.toFixed(2)}
         </div>
       </div>
 
       {/* Itemized Receipt */}
       <div className="w-full max-w-md mx-auto my-auto max-h-[35vh] overflow-y-auto custom-scrollbar bg-abyss/90 border border-smoke/30 rounded-lg p-4 pointer-events-auto">
         <ul className="space-y-2.5">
-          {items.map((item, idx) => (
-            <li
-              key={`${item.menuItem.id}-${idx}`}
-              className="flex justify-between items-center text-bone font-mono text-sm"
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <span className="text-base">{item.menuItem.emoji}</span>
-                <span className="truncate">
-                  {item.quantity}x {item.menuItem.name}
+          {safeItems.map((item, idx) => {
+            const name = item?.menuItem?.name || "Order Item";
+            const emoji = item?.menuItem?.emoji || "🍔";
+            const price = typeof item?.menuItem?.price === "number" ? item.menuItem.price : safeTotal;
+            const qty = typeof item?.quantity === "number" ? item.quantity : 1;
+
+            return (
+              <li
+                key={`${item?.menuItem?.id || idx}-${idx}`}
+                className="flex justify-between items-center text-bone font-mono text-sm"
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <span className="text-base">{emoji}</span>
+                  <span className="truncate">
+                    {qty}x {name}
+                  </span>
+                </div>
+                <span className="font-bold shrink-0 ml-2">
+                  ${(price * qty).toFixed(2)}
                 </span>
-              </div>
-              <span className="font-bold shrink-0 ml-2">
-                ${(item.menuItem.price * item.quantity).toFixed(2)}
-              </span>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       </div>
 
       {/* Payment Actions Container */}
-      <div className="w-full max-w-md mx-auto flex flex-col items-center gap-3">
+      <div className="w-full max-w-md mx-auto flex flex-col items-center gap-3 pointer-events-auto">
         {isSuccess ? (
           <div className="flex flex-col items-center animate-bounce py-4">
             <CheckCircle className="w-16 h-16 text-safe bg-void rounded-full" />
@@ -123,14 +141,18 @@ export function SlideToPayModal({ total, items, onPaymentComplete }: SlideToPayM
           </div>
         ) : (
           <>
-            {/* Primary: Quick Instant Tap Button */}
+            {/* Primary: Quick Instant Tap Button (Supports both touch and click) */}
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 triggerSuccess();
               }}
-              className="w-full py-4 px-6 bg-safe text-abyss font-mono font-black text-lg md:text-xl rounded-xl shadow-lg shadow-safe/20 active:scale-95 transition-all flex items-center justify-center gap-2 border-2 border-safe uppercase tracking-wider"
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                triggerSuccess();
+              }}
+              className="w-full py-4 px-6 bg-safe text-abyss font-mono font-black text-lg md:text-xl rounded-xl shadow-lg shadow-safe/20 active:scale-95 transition-all flex items-center justify-center gap-2 border-2 border-safe uppercase tracking-wider cursor-pointer pointer-events-auto select-none"
             >
               <Zap className="w-6 h-6 fill-current animate-pulse" />
               <span>{t("tapToPay")}</span>

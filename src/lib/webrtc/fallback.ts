@@ -7,8 +7,9 @@ export class CanvasSnapshotBroadcaster {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private intervalId: number | null = null;
-  private quality: number = 0.35;
+  private quality: number = 0.28;
   private isProcessing = false;
+  private processStartTime = 0;
   private frameCount = 0;
   private lastFpsTime = Date.now();
   private pauseListener?: () => void;
@@ -20,11 +21,14 @@ export class CanvasSnapshotBroadcaster {
   constructor(video: HTMLVideoElement, socket: PartySocket, fps: number = 10) {
     this.video = video;
     this.socket = socket;
-    this.fps = fps;
+    this.fps = Math.max(5, Math.min(fps, 12));
     this.canvas = document.createElement("canvas");
     this.canvas.width = 320;
     this.canvas.height = 180;
     this.ctx = this.canvas.getContext("2d", { alpha: false });
+    if (this.ctx) {
+      this.ctx.imageSmoothingEnabled = false;
+    }
 
     // Auto-resume camera if paused by mobile browser
     this.pauseListener = () => {
@@ -50,7 +54,16 @@ export class CanvasSnapshotBroadcaster {
   }
 
   private captureAndSend() {
-    if (this.isProcessing) return;
+    const now = Date.now();
+
+    // Safety watchdog: recover if a previous capture cycle hung
+    if (this.isProcessing) {
+      if (now - this.processStartTime > 150) {
+        this.isProcessing = false;
+      } else {
+        return;
+      }
+    }
 
     if (this.video.paused) {
       this.video.play().catch(() => {});
@@ -59,15 +72,15 @@ export class CanvasSnapshotBroadcaster {
     if (this.video.readyState < 2 || this.video.videoWidth === 0) return;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 
-    // Skip frame if buffer is backlogged, but do not halt stream
-    if (typeof this.socket.bufferedAmount === "number" && this.socket.bufferedAmount > 64 * 1024) {
+    // Skip frame if network buffer is backlogged (prevents queue buildup & latency)
+    if (typeof this.socket.bufferedAmount === "number" && this.socket.bufferedAmount > 32 * 1024) {
       return;
     }
 
     this.isProcessing = true;
+    this.processStartTime = now;
 
     try {
-      // 320x180 (16:9 standard): ultra-lightweight (~3-4 KB per frame), instant encode and transmission
       const targetWidth = 320;
       const targetHeight =
         Math.round((this.video.videoHeight / this.video.videoWidth) * targetWidth) || 180;
@@ -75,12 +88,12 @@ export class CanvasSnapshotBroadcaster {
       if (this.canvas.width !== targetWidth || this.canvas.height !== targetHeight) {
         this.canvas.width = targetWidth;
         this.canvas.height = targetHeight;
+        if (this.ctx) this.ctx.imageSmoothingEnabled = false;
       }
 
       this.ctx?.drawImage(this.video, 0, 0, targetWidth, targetHeight);
 
       const dataUrl = this.canvas.toDataURL("image/jpeg", this.quality);
-      const now = Date.now();
 
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
         this.socket.send(JSON.stringify({ type: "cctv-frame", frame: dataUrl, ts: now }));
@@ -124,48 +137,44 @@ export class CanvasSnapshotViewer {
   private socket: PartySocket;
   private activeImg: HTMLImageElement;
   private isDecoding = false;
-  private pendingFrame: string | null = null;
+  private decodeStartTime = 0;
+  private latestFrame: { frame: string; ts: number } | null = null;
   private lastRenderedTs = 0;
+  private animFrameId: number | null = null;
   private messageHandler: (event: MessageEvent) => void;
+  private destroyed = false;
 
   public onFrameReceived?: () => void;
 
   constructor(canvas: HTMLCanvasElement, socket: PartySocket) {
     this.canvas = canvas;
     this.socket = socket;
-    this.ctx = this.canvas.getContext("2d", { alpha: false });
+    this.ctx = this.canvas.getContext("2d", { alpha: false, desynchronized: true });
+    if (this.ctx) {
+      this.ctx.imageSmoothingEnabled = false;
+    }
+
     this.activeImg = new Image();
 
     this.activeImg.onload = () => {
+      if (this.destroyed) return;
+      this.isDecoding = false;
+
       const w = this.activeImg.naturalWidth || 320;
       const h = this.activeImg.naturalHeight || 180;
 
       if (this.canvas.width !== w || this.canvas.height !== h) {
         this.canvas.width = w;
         this.canvas.height = h;
+        if (this.ctx) this.ctx.imageSmoothingEnabled = false;
       }
 
-      this.ctx?.drawImage(this.activeImg, 0, 0);
+      this.ctx?.drawImage(this.activeImg, 0, 0, this.canvas.width, this.canvas.height);
       this.onFrameReceived?.();
-
-      // If a newer frame arrived while decoding, immediately decode it!
-      if (this.pendingFrame) {
-        const next = this.pendingFrame;
-        this.pendingFrame = null;
-        this.activeImg.src = next;
-      } else {
-        this.isDecoding = false;
-      }
     };
 
     this.activeImg.onerror = () => {
       this.isDecoding = false;
-      if (this.pendingFrame) {
-        const next = this.pendingFrame;
-        this.pendingFrame = null;
-        this.isDecoding = true;
-        this.activeImg.src = next;
-      }
     };
 
     this.messageHandler = (event: MessageEvent) => {
@@ -173,6 +182,9 @@ export class CanvasSnapshotViewer {
     };
 
     this.socket.addEventListener("message", this.messageHandler);
+
+    // Start decoupled render loop
+    this.startRenderLoop();
   }
 
   public updateSocket(socket: PartySocket) {
@@ -191,28 +203,61 @@ export class CanvasSnapshotViewer {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "cctv-frame" && msg.frame) {
-        // Drop stale or delayed frames from TCP transit backlog
-        if (msg.ts && msg.ts < this.lastRenderedTs) {
+        const now = Date.now();
+        const frameTs = typeof msg.ts === "number" ? msg.ts : now;
+
+        // Drop stale frames: older than 450ms or older than already rendered
+        if (msg.ts && now - msg.ts > 450) {
           return;
         }
-        if (msg.ts) {
-          this.lastRenderedTs = msg.ts;
+        if (frameTs <= this.lastRenderedTs) {
+          return;
         }
 
-        if (!this.isDecoding) {
-          this.isDecoding = true;
-          this.activeImg.src = msg.frame;
-        } else {
-          // Keep newest frame to decode next as soon as previous frame completes
-          this.pendingFrame = msg.frame;
-        }
+        // Store ONLY the newest frame, superseding any un-rendered prior frame
+        this.latestFrame = { frame: msg.frame, ts: frameTs };
       }
     } catch {}
   }
 
+  private startRenderLoop() {
+    const tick = () => {
+      if (this.destroyed) return;
+
+      const now = Date.now();
+
+      // Watchdog: reset stuck decode if image onload failed to fire within 120ms
+      if (this.isDecoding && now - this.decodeStartTime > 120) {
+        this.isDecoding = false;
+      }
+
+      // If ready and there's a fresh frame waiting, decode it!
+      if (!this.isDecoding && this.latestFrame) {
+        const toRender = this.latestFrame;
+        this.latestFrame = null;
+        this.lastRenderedTs = toRender.ts;
+        this.isDecoding = true;
+        this.decodeStartTime = now;
+        this.activeImg.src = toRender.frame;
+      }
+
+      this.animFrameId = requestAnimationFrame(tick);
+    };
+
+    this.animFrameId = requestAnimationFrame(tick);
+  }
+
   public destroy() {
+    this.destroyed = true;
+    if (this.animFrameId !== null) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = null;
+    }
     try {
       this.socket.removeEventListener("message", this.messageHandler);
     } catch {}
+    this.latestFrame = null;
+    this.activeImg.onload = null;
+    this.activeImg.onerror = null;
   }
 }

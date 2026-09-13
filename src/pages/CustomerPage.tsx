@@ -56,10 +56,40 @@ export default function CustomerPage() {
   const humanCustomers = (gameState?.players || []).filter((p) => p.role === "customer");
   const isOnlyCustomer = humanCustomers.length <= 1;
   const isCurrentTurnPlayer = Boolean(currentTurn && myId && currentTurn.playerId === myId);
-  const isOnlyCustomerTurn = Boolean(isOnlyCustomer && currentTurn && !currentTurn.playerId.startsWith("npc"));
+  const isOnlyCustomerTurn = Boolean(isOnlyCustomer && currentTurn && !currentTurn.playerId?.startsWith("npc"));
   const isMyActiveTurn = isMyTurn || isCurrentTurnPlayer || isOnlyCustomerTurn;
-  const activePayment = paymentRequest || currentTurn?.paymentRequest;
-  const shouldShowPayment = Boolean(activePayment && (isMyActiveTurn || !currentTurn?.playerId.startsWith("npc")));
+
+  const isPaymentPhase = currentTurn?.phase === "payment";
+  const activePayment =
+    paymentRequest ||
+    currentTurn?.paymentRequest ||
+    (isPaymentPhase
+      ? {
+          total:
+            (currentTurn?.assignedOrder || []).reduce(
+              (sum, item) => sum + (item.price || 5),
+              0
+            ) || 5.0,
+          items: (currentTurn?.assignedOrder || []).map((item) => ({
+            menuItem: item,
+            quantity: 1,
+          })),
+        }
+      : null);
+
+  const shouldShowPayment = Boolean(
+    activePayment &&
+      (isPaymentPhase || paymentRequest) &&
+      (isMyActiveTurn || isOnlyCustomer || !currentTurn || currentTurn.playerId === myId || !currentTurn.playerId?.startsWith("npc"))
+  );
+
+  // When payment is requested, automatically dismiss blocking overlays
+  useEffect(() => {
+    if (shouldShowPayment) {
+      setShowRoleCard(false);
+      setShowMenuPreview(false);
+    }
+  }, [shouldShowPayment]);
 
   // When a new turn starts for this player, show role card
   useEffect(() => {

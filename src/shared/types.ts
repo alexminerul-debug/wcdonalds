@@ -136,7 +136,7 @@ export type ClientMessage =
   | { type: "add-to-cart"; menuItemId: string }
   | { type: "remove-from-cart"; menuItemId: string }
   | { type: "clear-cart" }
-  | { type: "request-payment" }
+  | { type: "request-payment"; cart?: CartItem[] }
   | { type: "payment-complete" }
   | { type: "serve-order" }
   | { type: "report-anomaly" }
@@ -144,7 +144,7 @@ export type ClientMessage =
   | { type: "next-customer" }
   | { type: "start-next-night" }
   | { type: "camera-snapshot"; dataUrl: string }
-  | { type: "cctv-frame"; frame: string }
+  | { type: "cctv-frame"; frame: string; ts?: number }
   | { type: "viewer-join"; viewerId: string }
   | { type: "offer"; viewerId: string; sdp: unknown }
   | { type: "answer"; viewerId: string; sdp: unknown }
@@ -176,6 +176,6 @@ export type ServerMessage =
   | { type: "offer"; viewerId: string; sdp: unknown }
   | { type: "answer"; viewerId: string; sdp: unknown }
   | { type: "ice-candidate"; viewerId: string; candidate: unknown }
-  | { type: "cctv-frame"; frame: string }
+  | { type: "cctv-frame"; frame: string; ts?: number }
   | { type: "camera-ready" }
   | { type: "cctv-glitch"; effect: "static" | "blackout" | "distortion"; isAnomaly: boolean };

@@ -247,8 +247,26 @@ export default function CameraPage() {
     if (socket && connectionStatus === "connected") {
       sendMessage({ type: "join-room", name: "CCTV Camera" });
       sendMessage({ type: "claim-role", role: "camera" });
+      sendMessage({ type: "camera-ready" });
     }
   }, [socket, connectionStatus, sendMessage]);
+
+  // When a viewer joins the room, reply with camera-ready so viewer hooks in immediately
+  useEffect(() => {
+    if (!socket) return;
+    const handleViewerJoin = (event: MessageEvent) => {
+      try {
+        if (typeof event.data === 'string') {
+          const data = JSON.parse(event.data);
+          if (data.type === 'viewer-join') {
+            sendMessage({ type: 'camera-ready' });
+          }
+        }
+      } catch {}
+    };
+    socket.addEventListener('message', handleViewerJoin);
+    return () => socket.removeEventListener('message', handleViewerJoin);
+  }, [socket, sendMessage]);
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden select-none font-mono">

@@ -41,10 +41,19 @@ export default function WorkerPage() {
   }, [socket, sendMessage]);
 
   useEffect(() => {
-    startViewing();
-  }, [startViewing]);
+    if (socket) {
+      startViewing();
+      sendMessage({ type: 'viewer-join', viewerId: socket.id || '' });
+    }
+  }, [socket, startViewing, sendMessage]);
 
-  // Listen for camera-ready message to reconnect feed if camera came online after worker
+  // Listen for camera-ready message or cameraId changes to reconnect feed
+  useEffect(() => {
+    if (gameState?.cameraId) {
+      startViewing();
+    }
+  }, [gameState?.cameraId, startViewing]);
+
   useEffect(() => {
     if (!socket) return;
     const handleCameraReady = (event: MessageEvent) => {

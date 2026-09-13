@@ -66,7 +66,7 @@ export function POSRegister({
   };
 
   const handleRequestPayment = () => {
-    sendMessage({ type: 'request-payment' });
+    sendMessage({ type: 'request-payment', cart: localCart });
   };
 
   return (

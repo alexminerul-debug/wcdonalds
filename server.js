@@ -335,7 +335,24 @@ class GameRoom {
 
       case "request-payment": {
         if (!this.currentTurn) break;
-        const total = this.workerState.cart.reduce((s, i) => s + i.menuItem.price * i.quantity, 0);
+        if (msg.cart && Array.isArray(msg.cart) && msg.cart.length > 0) {
+          this.workerState.cart = msg.cart;
+        }
+
+        let total = this.workerState.cart.reduce((s, i) => s + (i.menuItem?.price || 0) * (i.quantity || 1), 0);
+        if (total <= 0 || this.workerState.cart.length === 0) {
+          const fallback = (this.currentTurn.assignedOrder || []).map((item) => ({
+            menuItem: item,
+            quantity: 1,
+          }));
+          if (fallback.length > 0) {
+            this.workerState.cart = fallback;
+            total = fallback.reduce((s, i) => s + i.menuItem.price, 0);
+          } else {
+            total = 5.0;
+          }
+        }
+
         this.currentTurn.phase = "payment";
         this.currentTurn.paymentRequest = { total, items: [...this.workerState.cart] };
         this.broadcast({ type: "payment-request", total, items: this.workerState.cart });
@@ -453,8 +470,11 @@ class GameRoom {
             }
           }
         }
+        if ((!worker || worker.readyState !== WebSocket.OPEN) && this.hostId) {
+          worker = this.connections.get(this.hostId) || null;
+        }
         if (worker && worker.readyState === WebSocket.OPEN) {
-          worker.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame }));
+          worker.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame, ts: msg.ts || Date.now() }));
         }
 
         // Also feed cctv frame to AI detection engine if anomaly turn is active (every 3.0s)
