@@ -353,8 +353,17 @@ class GameRoom {
         if (isAnomaly) this.workerState.lives--;
         else this.workerState.totalServed++;
 
+        this.currentTurn.phase = "resolved";
+        this.currentTurn.result = result;
+        this.workerState.cart = [];
         this.broadcast({ type: "serve-result", result });
-        this.advanceTurn();
+        this.broadcastState();
+
+        setTimeout(() => {
+          if (this.currentTurn && this.currentTurn.phase === "resolved") {
+            this.advanceTurn();
+          }
+        }, 3000);
         break;
       }
 
@@ -368,8 +377,17 @@ class GameRoom {
         if (isAnomaly) this.workerState.totalCaught++;
         else this.workerState.lives--;
 
+        this.currentTurn.phase = "resolved";
+        this.currentTurn.result = result;
+        this.workerState.cart = [];
         this.broadcast({ type: "report-result", result });
-        this.advanceTurn();
+        this.broadcastState();
+
+        setTimeout(() => {
+          if (this.currentTurn && this.currentTurn.phase === "resolved") {
+            this.advanceTurn();
+          }
+        }, 3000);
         break;
       }
 

@@ -5,6 +5,7 @@ import { useGameState } from "@/hooks/useGameState";
 import { SoundEngine } from "@/lib/audio/soundEngine";
 import { vibrateTurnNotification, vibratePayment } from "@/lib/effects/haptics";
 import { MENU_ITEMS, SCORING } from "@/shared/constants";
+import { useTranslation } from "@/lib/i18n";
 
 import { QueueWaiting } from "@/components/customer/QueueWaiting";
 import { SecretRoleCard } from "@/components/customer/SecretRoleCard";
@@ -14,11 +15,13 @@ import { SlideToPayModal } from "@/components/customer/SlideToPayModal";
 import { DetectedScreen } from "@/components/customer/DetectedScreen";
 import { VictoryScreen } from "@/components/customer/VictoryScreen";
 import { GlitchText } from "@/components/ui/GlitchText";
-import { Moon, Clock, Skull } from "lucide-react";
-import { clsx } from "clsx";
+import { LanguageSelector } from "@/components/common/LanguageSelector";
+import { LeaveRoomButton } from "@/components/common/LeaveRoomButton";
+import { Moon, Clock, Skull, CheckCircle, ArrowRight } from "lucide-react";
 
 export default function CustomerPage() {
   const { code } = useParams<{ code: string }>();
+  const { t } = useTranslation();
   const [showRoleCard, setShowRoleCard] = useState(false);
   const [showMenuPreview, setShowMenuPreview] = useState(false);
   const [resultDismissed, setResultDismissed] = useState(false);
@@ -54,8 +57,8 @@ export default function CustomerPage() {
   // Robust Turn Matching: if there is only 1 customer in the room, they are always active when an order is up
   const humanCustomers = (gameState?.players || []).filter((p) => p.role === "customer");
   const isOnlyCustomer = humanCustomers.length <= 1;
-  const isCurrentTurnPlayer = currentTurn && myId && currentTurn.playerId === myId;
-  const isOnlyCustomerTurn = isOnlyCustomer && currentTurn && !currentTurn.playerId.startsWith("npc");
+  const isCurrentTurnPlayer = Boolean(currentTurn && myId && currentTurn.playerId === myId);
+  const isOnlyCustomerTurn = Boolean(isOnlyCustomer && currentTurn && !currentTurn.playerId.startsWith("npc"));
   const isMyActiveTurn = isMyTurn || isCurrentTurnPlayer || isOnlyCustomerTurn;
 
   // When a new turn starts for this player, show role card
@@ -75,6 +78,16 @@ export default function CustomerPage() {
     }
   }, [isMyActiveTurn, gameState?.currentTurnIndex, prevTurnIndex]);
 
+  // Auto-dismiss result screen after 3.5s so customer is never stuck
+  useEffect(() => {
+    if (lastResult && currentTurn?.phase === "resolved" && !resultDismissed) {
+      const timer = setTimeout(() => {
+        setResultDismissed(true);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [lastResult, currentTurn?.phase, resultDismissed]);
+
   // Vibrate on payment request
   useEffect(() => {
     if (paymentRequest) {
@@ -88,12 +101,16 @@ export default function CustomerPage() {
 
   if (connectionStatus !== "connected" || !gameState) {
     return (
-      <div className="flex items-center justify-center h-screen bg-abyss text-bone font-mono">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-abyss text-bone font-mono p-4">
         <GlitchText
           text={
-            connectionStatus === "connecting" ? "CONNECTING..." : "DISCONNECTED"
+            connectionStatus === "connecting" ? t("connecting") : t("disconnected")
           }
         />
+        <div className="mt-6 flex items-center gap-3">
+          <LanguageSelector />
+          <LeaveRoomButton roomCode={code} />
+        </div>
       </div>
     );
   }
@@ -112,39 +129,43 @@ export default function CustomerPage() {
   // ---- NIGHT COMPLETE (6:00 AM) ----
   if (gameState.phase === "night_complete") {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-abyss p-6 text-center select-none font-mono animate-fade-in">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-abyss p-6 text-center select-none font-mono animate-fade-in">
         <div className="w-16 h-16 rounded-full bg-safe/20 border-2 border-safe flex items-center justify-center mb-6 animate-pulse">
           <Clock className="w-8 h-8 text-safe" />
         </div>
         <div className="text-safe text-sm tracking-widest uppercase mb-2">6:00 AM</div>
-        <h1 className="text-3xl md:text-5xl font-bold text-bone mb-4 glitch-text" data-text={`NIGHT ${gameState.currentNight || 1} SURVIVED`}>
-          NIGHT {gameState.currentNight || 1} SURVIVED
+        <h1 className="text-3xl md:text-5xl font-bold text-bone mb-4 glitch-text" data-text={`${t("night")} ${gameState.currentNight || 1} ${t("nightSurvived")}`}>
+          {t("night")} {gameState.currentNight || 1} {t("nightSurvived")}
         </h1>
-        <p className="font-mono text-fog max-w-xs text-sm">
-          Shift completed! The sun rises over WcDonald's...
+        <p className="text-fog text-sm max-w-sm mb-6">
+          The sun rises over WcDonald's. Preparing next shift...
         </p>
-        <div className="mt-8 text-amber-glow text-xs uppercase tracking-widest animate-pulse">
-          Preparing for Night {(gameState.currentNight || 1) + 1} of 5...
+        <div className="flex items-center gap-3">
+          <LanguageSelector />
+          <LeaveRoomButton roomCode={code} />
         </div>
       </div>
     );
   }
 
-  // ---- GAME OVER ----
+  // ---- GAME OVER / VICTORY ----
   if (gameState.phase === "game_over") {
-    const isVictory = gameState.workerState.lives > 0;
+    const isVictory = (gameState as any).victory === true;
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-abyss p-6 text-center select-none font-mono">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-abyss p-6 text-center select-none font-mono">
         {isVictory ? (
           <>
-            <div className="w-20 h-20 rounded-full border-4 border-safe flex items-center justify-center mb-6 bg-safe/20 animate-pulse">
-              <Moon className="w-10 h-10 text-safe" />
+            <div className="w-20 h-20 rounded-full border-4 border-amber-glow flex items-center justify-center mb-6 bg-amber-glow/20 animate-bounce">
+              <Moon className="w-10 h-10 text-amber-glow" />
             </div>
-            <h1 className="text-3xl md:text-5xl font-bold text-safe mb-4 glitch-text" data-text="ALL 5 NIGHTS SURVIVED">
-              ALL 5 NIGHTS SURVIVED!
+            <h1 className="text-3xl md:text-5xl font-mono text-amber-glow mb-4 glitch-text" data-text={t("allNightsSurvived")}>
+              {t("allNightsSurvived")}
             </h1>
-            <p className="font-mono text-bone text-sm max-w-xs mb-4">
-              Congratulations! You survived the entire week at WcDonald's!
+            <p className="font-mono text-bone text-base max-w-sm mb-4">
+              {t("employeeOfMonth")}
+            </p>
+            <p className="font-mono text-fog text-xs max-w-xs mb-8">
+              All anomalies survived across 5 full shifts.
             </p>
           </>
         ) : (
@@ -152,14 +173,18 @@ export default function CustomerPage() {
             <div className="w-20 h-20 rounded-full border-4 border-blood flex items-center justify-center mb-6 bg-blood/20 animate-pulse">
               <Skull className="w-10 h-10 text-blood" />
             </div>
-            <h1 className="text-3xl md:text-4xl font-mono text-blood-bright mb-4 glitch-text" data-text="SHIFT TERMINATED">
-              SHIFT TERMINATED
+            <h1 className="text-3xl md:text-4xl font-mono text-blood-bright mb-4 glitch-text" data-text={t("shiftTerminated")}>
+              {t("shiftTerminated")}
             </h1>
-            <p className="font-mono text-fog text-sm max-w-xs">
-              The worker lost all lives to anomalies. The night is over.
+            <p className="font-mono text-fog text-sm max-w-xs mb-8">
+              {t("shiftTerminatedDesc")}
             </p>
           </>
         )}
+        <div className="flex items-center gap-3">
+          <LanguageSelector />
+          <LeaveRoomButton roomCode={code} />
+        </div>
       </div>
     );
   }
@@ -183,24 +208,46 @@ export default function CustomerPage() {
         return <DetectedScreen onDismiss={() => setResultDismissed(true)} />;
       case "served_normal":
         return (
-          <div className="flex flex-col items-center justify-center h-screen bg-abyss p-6 text-center">
-            <h1 className="text-3xl font-mono text-safe mb-4">
-              ORDER COMPLETE
+          <div className="flex flex-col items-center justify-center min-h-screen bg-abyss p-6 text-center select-none font-mono animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-safe/20 border-2 border-safe flex items-center justify-center mb-6">
+              <CheckCircle className="w-8 h-8 text-safe animate-pulse" />
+            </div>
+            <h1 className="text-3xl font-bold text-safe mb-3">
+              {t("orderComplete")}
             </h1>
-            <p className="font-mono text-fog">
-              Thank you for visiting WcDonald's.
+            <p className="text-fog text-sm mb-8">
+              {t("thankYou")}
             </p>
+            <button
+              type="button"
+              onClick={() => setResultDismissed(true)}
+              className="px-6 py-3 bg-safe text-abyss font-bold rounded-lg flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all text-sm"
+            >
+              <span>{t("nextInLine")}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         );
       case "reported_innocent":
         return (
-          <div className="flex flex-col items-center justify-center h-screen bg-abyss p-6 text-center">
-            <h1 className="text-3xl font-mono text-blood-bright mb-4">
-              WRONGFULLY EJECTED
+          <div className="flex flex-col items-center justify-center min-h-screen bg-abyss p-6 text-center select-none font-mono animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-blood/20 border-2 border-blood flex items-center justify-center mb-6">
+              <Skull className="w-8 h-8 text-blood animate-pulse" />
+            </div>
+            <h1 className="text-3xl font-bold text-blood-bright mb-3">
+              {t("wrongfullyEjected")}
             </h1>
-            <p className="font-mono text-fog">
-              You were innocent. The Worker has been fined.
+            <p className="text-fog text-sm mb-8">
+              {t("innocentFined")}
             </p>
+            <button
+              type="button"
+              onClick={() => setResultDismissed(true)}
+              className="px-6 py-3 bg-void border border-smoke/40 text-bone font-bold rounded-lg flex items-center gap-2 hover:border-amber-glow active:scale-95 transition-all text-sm"
+            >
+              <span>{t("nextInLine")}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         );
     }
@@ -209,21 +256,26 @@ export default function CustomerPage() {
   // ---- ACTIVE TURN ----
   if (isMyActiveTurn) {
     return (
-      <div className="min-h-screen bg-abyss text-bone relative">
-        {/* Top Night & Time Indicator */}
-        <div className="absolute top-2 left-2 flex items-center gap-2 z-10 font-mono text-xs text-amber-glow bg-void/80 px-2 py-1 border border-smoke/30">
-          <span>NIGHT {gameState?.currentNight || 1}/5</span>
-          <span className="text-smoke">|</span>
-          <span className="text-bone">{gameState?.nightTime || "12:00 AM"}</span>
-        </div>
+      <div className="min-h-screen bg-abyss text-bone relative pb-10">
+        {/* Top Header Bar with Night/Time, Language & Leave */}
+        <header className="sticky top-0 z-30 flex items-center justify-between px-3 py-2 bg-abyss/95 border-b border-smoke/30 backdrop-blur-sm">
+          <div className="flex items-center gap-2 font-mono text-xs text-amber-glow bg-void/80 px-2 py-1 border border-smoke/30 rounded">
+            <span>{t("night")} {gameState?.currentNight || 1}/5</span>
+            <span className="text-smoke">|</span>
+            <span className="text-bone">{gameState?.nightTime || "12:00 AM"}</span>
+          </div>
 
-        {/* Connection dot */}
-        <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
-          <div className="w-2 h-2 rounded-full bg-safe animate-pulse" />
-          <span className="text-[10px] font-mono text-fog uppercase">
-            live
-          </span>
-        </div>
+          <div className="flex items-center gap-2">
+            <LanguageSelector />
+            <LeaveRoomButton roomCode={code} />
+            <div className="flex items-center gap-1.5 ml-1">
+              <div className="w-2 h-2 rounded-full bg-safe animate-pulse" />
+              <span className="text-[10px] font-mono text-fog uppercase hidden xs:inline">
+                {t("live")}
+              </span>
+            </div>
+          </div>
+        </header>
 
         {/* Role reveal overlay */}
         {showRoleCard && (
@@ -235,7 +287,7 @@ export default function CustomerPage() {
 
         {/* Main content (after role card dismissed) */}
         {!showRoleCard && (
-          <div className="p-6 pb-24 min-h-screen space-y-6">
+          <div className="p-4 md:p-6 space-y-6 max-w-lg mx-auto">
             <OrderDisplay items={itemsToDisplay} isAnomaly={isAnomaly} />
 
             {isAnomaly && (
@@ -258,12 +310,12 @@ export default function CustomerPage() {
             )}
 
             {!isAnomaly && (
-              <div className="text-center py-6">
+              <div className="text-center py-6 bg-void/40 border border-smoke/20 rounded-lg p-4">
                 <p className="text-fog text-sm font-mono">
-                  Act completely normal. Nothing to hide.
+                  {t("secretRoleNormalDesc")}
                 </p>
-                <p className="text-fog/40 text-xs font-mono mt-2">
-                  Waiting for Worker to ring up your order...
+                <p className="text-fog/50 text-xs font-mono mt-2">
+                  {t("waitingCustomer")}
                 </p>
               </div>
             )}
@@ -284,37 +336,53 @@ export default function CustomerPage() {
 
   // ---- WAITING IN QUEUE ----
   return (
-    <div className="min-h-screen bg-abyss">
-      <QueueWaiting
-        position={queuePosition}
-        totalInQueue={totalQueue}
-        onPreviewMenu={() => setShowMenuPreview(true)}
-      />
+    <div className="min-h-screen bg-abyss flex flex-col">
+      {/* Top Header Bar */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-3 py-2 bg-abyss/95 border-b border-smoke/30 backdrop-blur-sm">
+        <div className="flex items-center gap-2 font-mono text-xs text-amber-glow bg-void/80 px-2 py-1 border border-smoke/30 rounded">
+          <span>{t("night")} {gameState?.currentNight || 1}/5</span>
+          <span className="text-smoke">|</span>
+          <span className="text-bone">{gameState?.nightTime || "12:00 AM"}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <LanguageSelector />
+          <LeaveRoomButton roomCode={code} />
+        </div>
+      </header>
+
+      <div className="flex-1 flex flex-col justify-center">
+        <QueueWaiting
+          position={queuePosition}
+          totalInQueue={totalQueue}
+          onPreviewMenu={() => setShowMenuPreview(true)}
+        />
+      </div>
 
       {/* Menu Preview Modal */}
       {showMenuPreview && (
-        <div className="fixed inset-0 z-50 bg-abyss p-6 flex flex-col">
+        <div className="fixed inset-0 z-50 bg-abyss p-6 flex flex-col font-mono">
           <div className="flex justify-between items-center mb-6 border-b border-fog/20 pb-4">
-            <h2 className="text-xl font-mono text-bone">WcDonald's Menu</h2>
+            <h2 className="text-xl text-bone">WcDonald's Menu</h2>
             <button
               onClick={() => setShowMenuPreview(false)}
-              className="text-blood-bright font-mono uppercase text-sm"
+              className="text-blood-bright uppercase text-sm font-bold"
             >
               Close
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-3">
+          <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
             {MENU_ITEMS.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between bg-void border border-fog/10 px-4 py-3"
+                className="flex items-center justify-between bg-void border border-smoke/30 px-4 py-3 rounded"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{item.emoji}</span>
-                  <span className="font-mono text-bone">{item.name}</span>
+                  <span className="text-bone text-sm">{item.name}</span>
                 </div>
-                <span className="font-mono text-amber-glow">
-                  ${item.price}
+                <span className="text-amber-glow font-bold text-sm">
+                  ${item.price.toFixed(2)}
                 </span>
               </div>
             ))}

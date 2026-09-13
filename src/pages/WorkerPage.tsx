@@ -9,12 +9,15 @@ import { AnomalyCodex } from '@/components/worker/AnomalyCodex';
 import { AbilityShop } from '@/components/worker/AbilityShop';
 import { DecisionPanel } from '@/components/worker/DecisionPanel';
 import { JumpscareOverlay } from '@/components/worker/JumpscareOverlay';
+import { LanguageSelector } from '@/components/common/LanguageSelector';
+import { LeaveRoomButton } from '@/components/common/LeaveRoomButton';
 import { Heart, Moon, Skull } from 'lucide-react';
-import { HorrorButton } from '@/components/ui/HorrorButton';
 import { clsx } from 'clsx';
+import { useTranslation } from '@/lib/i18n';
 
 export default function WorkerPage() {
   const { code } = useParams<{ code: string }>();
+  const { t } = useTranslation();
   const { socket, sendMessage } = useGameSocket(code || '');
   const { gameState, currentTurn, cctvGlitch, workerState, cartItems } = useGameState(socket);
   
@@ -87,33 +90,36 @@ export default function WorkerPage() {
       <JumpscareOverlay active={showJumpscare} onDismiss={() => setShowJumpscare(false)} />
 
       {/* Top HUD */}
-      <header className="bg-abyss border-b border-smoke/30 p-2 md:p-4 flex justify-between items-center z-10 shrink-0 shadow-md">
-        <div className="flex items-center gap-3 md:gap-5">
-          <div className="text-amber-glow font-bold tracking-widest text-xs md:text-sm flex items-center gap-2">
-            <Moon className="w-4 h-4 text-amber-glow animate-pulse" />
-            <span>NIGHT {gameState?.currentNight || 1}/5</span>
+      <header className="bg-abyss border-b border-smoke/30 p-2 md:p-3 flex justify-between items-center z-10 shrink-0 shadow-md">
+        <div className="flex items-center gap-2 md:gap-4">
+          <div className="text-amber-glow font-bold tracking-widest text-xs md:text-sm flex items-center gap-1.5 bg-void/60 px-2 py-1 border border-smoke/30 rounded">
+            <Moon className="w-3.5 h-3.5 text-amber-glow animate-pulse" />
+            <span>{t("night")} {gameState?.currentNight || 1}/5</span>
             <span className="text-smoke">|</span>
             <span className="text-bone">{gameState?.nightTime || "12:00 AM"}</span>
           </div>
+
           <div className="flex gap-1">
             {Array.from({ length: 3 }).map((_, i) => (
               <Heart 
                 key={i} 
-                className={clsx("w-4 h-4 md:w-5 md:h-5", i < (workerState?.lives || 0) ? "text-blood fill-blood" : "text-ash/30")} 
+                className={clsx("w-3.5 h-3.5 md:w-4 md:h-4", i < (workerState?.lives || 0) ? "text-blood fill-blood" : "text-ash/30")} 
               />
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-4 text-xs md:text-sm">
-          <div className="text-ash">ROOM: <span className="text-bone">{code}</span></div>
+
+        <div className="flex items-center gap-2 md:gap-3 text-xs">
           <div className="text-safe bg-safe/10 px-2 py-1 rounded border border-safe/20 font-bold">
             ${workerState?.balance.toFixed(2) || '0.00'}
           </div>
+          <LanguageSelector />
+          <LeaveRoomButton roomCode={code} />
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden pb-28 md:pb-24">
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden pb-32 md:pb-24">
         
         {/* Mobile Tabs Navigation */}
         <div className="md:hidden flex bg-void border-b border-smoke/30 shrink-0">
@@ -122,11 +128,11 @@ export default function WorkerPage() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={clsx(
-                "flex-1 py-3 text-xs font-bold transition-colors uppercase border-b-2",
+                "flex-1 py-2.5 text-xs font-bold transition-colors uppercase border-b-2",
                 activeTab === tab ? "border-amber-glow text-amber-glow bg-abyss" : "border-transparent text-ash hover:bg-smoke/5"
               )}
             >
-              {tab}
+              {tab === 'pos' ? t('posTab') : tab === 'cctv' ? t('cctvTab') : tab === 'shop' ? t('shopTab') : t('codexTab')}
             </button>
           ))}
         </div>
@@ -180,7 +186,7 @@ export default function WorkerPage() {
                   "absolute -bottom-3 right-4 p-2 rounded-full border shadow-lg transition-colors z-30",
                   nightVisionOn ? "bg-eerie/20 border-eerie text-eerie" : "bg-abyss border-smoke/30 text-ash hover:text-bone"
                 )}
-                title="Toggle Night Vision"
+                title={t("nightVision")}
               >
                 <Moon className="w-5 h-5" />
               </button>
@@ -205,56 +211,59 @@ export default function WorkerPage() {
 
       {/* 6:00 AM Night Survived Celebration Overlay */}
       {gameState?.phase === "night_complete" && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6 text-center select-none font-mono">
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6 text-center select-none font-mono animate-fade-in">
           <div className="w-20 h-20 rounded-full border-4 border-safe/60 flex items-center justify-center mb-6 bg-safe/10 animate-bounce">
             <Moon className="w-10 h-10 text-safe" />
           </div>
           <div className="text-safe font-mono text-xl tracking-widest uppercase mb-2">6:00 AM</div>
-          <h1 className="text-4xl md:text-6xl font-bold font-mono text-bone mb-4 glitch-text" data-text={`NIGHT ${gameState.currentNight || 1} SURVIVED`}>
-            NIGHT {gameState.currentNight || 1} SURVIVED
+          <h1 className="text-4xl md:text-6xl font-bold font-mono text-bone mb-4 glitch-text" data-text={`${t("night")} ${gameState.currentNight || 1} ${t("nightSurvived")}`}>
+            {t("night")} {gameState.currentNight || 1} {t("nightSurvived")}
           </h1>
           <p className="font-mono text-fog text-sm md:text-base max-w-md mb-8">
             The shift has ended! Earnings and purchased upgrades are safely preserved for the next night.
           </p>
           <div className="bg-void border border-smoke/40 p-4 rounded max-w-xs w-full mb-8 font-mono text-left space-y-2">
             <div className="flex justify-between text-xs text-ash">
-              <span>Current Night:</span>
+              <span>{t("night")}:</span>
               <span className="text-bone">{gameState.currentNight || 1} of 5</span>
             </div>
             <div className="flex justify-between text-xs text-ash">
-              <span>Register Balance:</span>
+              <span>{t("balance")}:</span>
               <span className="text-amber-glow">${workerState?.balance.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-xs text-ash">
-              <span>Lives Remaining:</span>
+              <span>{t("lives")}:</span>
               <span className="text-blood">{workerState?.lives} / 3</span>
             </div>
           </div>
-          <button
-            onClick={() => sendMessage({ type: "start-next-night" })}
-            className="px-8 py-4 bg-safe text-abyss font-bold uppercase tracking-widest hover:bg-safe/80 transition-all font-mono shadow-lg"
-          >
-            Start Night {(gameState.currentNight || 1) + 1} of 5 &rarr;
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 items-center">
+            <button
+              onClick={() => sendMessage({ type: "start-next-night" })}
+              className="px-8 py-4 bg-safe text-abyss font-bold uppercase tracking-widest hover:bg-safe/80 transition-all font-mono shadow-lg"
+            >
+              {t("startNextNight")} {(gameState.currentNight || 1) + 1} of 5 &rarr;
+            </button>
+            <LeaveRoomButton roomCode={code} />
+          </div>
         </div>
       )}
 
       {/* Game Over / Victory Overlay */}
       {gameState?.phase === "game_over" && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6 text-center select-none font-mono">
-          {workerState?.lives > 0 ? (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6 text-center select-none font-mono animate-fade-in">
+          {workerState && workerState.lives > 0 ? (
             <>
               <div className="w-24 h-24 rounded-full border-4 border-safe flex items-center justify-center mb-6 bg-safe/20 animate-pulse">
                 <Moon className="w-12 h-12 text-safe" />
               </div>
-              <h1 className="text-4xl md:text-6xl font-bold text-safe mb-4 glitch-text" data-text="5 NIGHTS SURVIVED">
-                5 NIGHTS SURVIVED!
+              <h1 className="text-4xl md:text-6xl font-bold text-safe mb-4 glitch-text" data-text={t("allNightsSurvived")}>
+                {t("allNightsSurvived")}
               </h1>
               <p className="text-bone text-base max-w-md mb-4">
-                You survived the entire work week at WcDonald's! You are officially Employee of the Month.
+                {t("employeeOfMonth")}
               </p>
               <div className="text-amber-glow text-lg font-bold mb-8">
-                Final Paycheck: ${workerState.balance.toFixed(2)}
+                {t("total")}: ${workerState.balance.toFixed(2)}
               </div>
             </>
           ) : (
@@ -262,20 +271,23 @@ export default function WorkerPage() {
               <div className="w-24 h-24 rounded-full border-4 border-blood flex items-center justify-center mb-6 bg-blood/20 animate-pulse">
                 <Skull className="w-12 h-12 text-blood" />
               </div>
-              <h1 className="text-4xl md:text-6xl font-bold text-blood-bright mb-4 glitch-text" data-text="SHIFT TERMINATED">
-                SHIFT TERMINATED
+              <h1 className="text-4xl md:text-6xl font-bold text-blood-bright mb-4 glitch-text" data-text={t("shiftTerminated")}>
+                {t("shiftTerminated")}
               </h1>
               <p className="text-fog text-base max-w-md mb-8">
-                You ran out of lives. An anomaly breached the counter.
+                {t("shiftTerminatedDesc")}
               </p>
             </>
           )}
-          <button
-            onClick={() => window.location.reload()}
-            className="px-8 py-3 border border-smoke/40 text-bone hover:bg-white/10 transition-all uppercase tracking-widest text-sm"
-          >
-            Play Again
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 border border-smoke/40 text-bone hover:bg-white/10 transition-all uppercase tracking-widest text-sm"
+            >
+              Play Again
+            </button>
+            <LeaveRoomButton roomCode={code} />
+          </div>
         </div>
       )}
     </div>

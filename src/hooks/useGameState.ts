@@ -102,8 +102,13 @@ export function useGameState(socket: PartySocket | null) {
             setPaymentRequest({ total: msg.total, items: msg.items });
             break;
             
+          case 'payment-received':
+            setPaymentRequest(null);
+            break;
+            
           case 'serve-result':
           case 'report-result':
+            setPaymentRequest(null);
             setLastResult(msg.result);
             break;
             

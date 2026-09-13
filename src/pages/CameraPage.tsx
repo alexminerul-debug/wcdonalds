@@ -6,22 +6,29 @@ import { SecurityHUD } from "@/components/camera/SecurityHUD";
 import { SnapshotEngine } from "@/components/camera/SnapshotEngine";
 import { BroadcasterStreamer } from "@/lib/webrtc/broadcaster";
 import { CanvasSnapshotBroadcaster } from "@/lib/webrtc/fallback";
-import { Camera, ArrowLeft, RefreshCw, AlertTriangle } from "lucide-react";
+import { Camera, ArrowLeft, RefreshCw, AlertTriangle, SwitchCamera } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
+import { LanguageSelector } from "@/components/common/LanguageSelector";
+import { LeaveRoomButton } from "@/components/common/LeaveRoomButton";
 
 export default function CameraPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [requestingCamera, setRequestingCamera] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fps, setFps] = useState(0);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
   const { socket, sendMessage, connectionStatus } = useGameSocket(code || "");
   const { gameState } = useGameState(socket);
 
+  const streamRef = useRef<MediaStream | null>(null);
   const streamerRef = useRef<BroadcasterStreamer | null>(null);
   const fallbackBroadcasterRef = useRef<CanvasSnapshotBroadcaster | null>(null);
+  const wakeLockRef = useRef<any>(null);
 
   // Frame counting for FPS display
   const frameCountRef = useRef(0);
@@ -37,11 +44,27 @@ export default function CameraPage() {
     }
   }, []);
 
+  // Request Screen Wake Lock so phone doesn't sleep or freeze stream
+  const requestWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator && !wakeLockRef.current) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+      }
+    } catch {
+      // Wake Lock may fail on low battery or unsupported browser
+    }
+  };
+
   // Request camera function with progressive fallback
-  const startCamera = async () => {
-    if (cameraReady) return;
+  const startCamera = async (targetFacing: "environment" | "user" = facingMode) => {
     setRequestingCamera(true);
     setError(null);
+
+    // Release existing stream tracks if switching camera
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
 
     // Check secure context
     if (
@@ -65,18 +88,17 @@ export default function CameraPage() {
 
     let stream: MediaStream | null = null;
 
-    // Constraint attempt list: progressive degradation
     const constraintOptions: MediaStreamConstraints[] = [
       {
         video: {
-          facingMode: { ideal: "environment" },
+          facingMode: { ideal: targetFacing },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
         audio: false,
       },
       {
-        video: { facingMode: "environment" },
+        video: { facingMode: targetFacing },
         audio: false,
       },
       {
@@ -90,8 +112,6 @@ export default function CameraPage() {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         if (stream) break;
       } catch (err: any) {
-        console.warn("Failed constraints attempt:", constraints, err);
-        // If user explicitly denied, don't keep looping
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
           setError("Camera permission denied. Please allow camera access in browser settings.");
           setRequestingCamera(false);
@@ -107,28 +127,18 @@ export default function CameraPage() {
     }
 
     try {
+      streamRef.current = stream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.muted = true;
         videoRef.current.playsInline = true;
         await videoRef.current.play();
         setCameraReady(true);
+        requestWakeLock();
 
-        // Start WebRTC broadcaster
-        if (socket) {
-          const streamer = new BroadcasterStreamer(socket);
-          // @ts-ignore
-          streamer.stream = stream;
-          streamerRef.current = streamer;
-
-          // Start Canvas Fallback broadcaster (10 FPS)
-          const fallback = new CanvasSnapshotBroadcaster(videoRef.current, socket, 10);
-          fallback.start();
-          fallbackBroadcasterRef.current = fallback;
-
-          // Announce camera ready to worker
-          sendMessage({ type: "camera-ready" });
-        }
+        // Setup broadcasters if socket is ready
+        setupBroadcasters(stream);
       }
     } catch (playErr) {
       console.error("Video playback error:", playErr);
@@ -138,14 +148,52 @@ export default function CameraPage() {
     }
   };
 
-  // Auto-attempt camera once on mount
+  const setupBroadcasters = (stream: MediaStream) => {
+    if (!socket || !videoRef.current) return;
+
+    if (streamerRef.current) {
+      streamerRef.current.stop();
+      streamerRef.current = null;
+    }
+    if (fallbackBroadcasterRef.current) {
+      fallbackBroadcasterRef.current.stop();
+      fallbackBroadcasterRef.current = null;
+    }
+
+    // Start WebRTC broadcaster
+    try {
+      const streamer = new BroadcasterStreamer(socket);
+      // @ts-ignore
+      streamer.stream = stream;
+      streamerRef.current = streamer;
+    } catch {}
+
+    // Start Canvas Fallback broadcaster (8 FPS with backpressure check)
+    try {
+      const fallback = new CanvasSnapshotBroadcaster(videoRef.current, socket, 8);
+      fallback.start();
+      fallbackBroadcasterRef.current = fallback;
+    } catch {}
+
+    // Announce camera ready to worker
+    sendMessage({ type: "camera-ready" });
+  };
+
+  // Flip camera between front & back
+  const handleFlipCamera = async () => {
+    const nextMode = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(nextMode);
+    await startCamera(nextMode);
+  };
+
+  // Auto-attempt camera on mount
   useEffect(() => {
     startCamera().catch(() => {});
 
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const s = videoRef.current.srcObject as MediaStream;
-        s.getTracks().forEach((t) => t.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
       if (streamerRef.current) {
         streamerRef.current.stop();
@@ -153,8 +201,20 @@ export default function CameraPage() {
       if (fallbackBroadcasterRef.current) {
         fallbackBroadcasterRef.current.stop();
       }
+      if (wakeLockRef.current) {
+        try {
+          wakeLockRef.current.release();
+        } catch {}
+      }
     };
-  }, [socket]);
+  }, []);
+
+  // Update socket connections on broadcaster when socket changes WITHOUT killing media stream
+  useEffect(() => {
+    if (socket && streamRef.current && cameraReady) {
+      setupBroadcasters(streamRef.current);
+    }
+  }, [socket, connectionStatus, cameraReady]);
 
   // Join room and claim camera role on socket
   useEffect(() => {
@@ -164,7 +224,7 @@ export default function CameraPage() {
     }
   }, [socket, connectionStatus, sendMessage]);
 
-  // Send snapshots for AI analysis
+  // Send snapshots for AI analysis (throttled to 3.0s)
   const handleSnapshot = useCallback(
     (dataUrl: string) => {
       if (socket && gameState?.phase === "playing") {
@@ -177,6 +237,26 @@ export default function CameraPage() {
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden select-none font-mono">
+      {/* Top Floating Controls */}
+      <div className="absolute top-3 left-3 right-3 z-40 flex items-center justify-between pointer-events-none">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <LanguageSelector />
+          <LeaveRoomButton roomCode={code} />
+        </div>
+
+        {cameraReady && (
+          <button
+            type="button"
+            onClick={handleFlipCamera}
+            className="pointer-events-auto px-2.5 py-1 text-xs font-mono rounded bg-void/80 border border-smoke/40 text-bone hover:border-amber-glow hover:text-amber-glow transition-colors flex items-center gap-1.5"
+            title={t("flipCamera")}
+          >
+            <SwitchCamera className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{t("flipCamera")}</span>
+          </button>
+        )}
+      </div>
+
       {/* Camera Video Stream */}
       <video
         ref={videoRef}
@@ -199,15 +279,15 @@ export default function CameraPage() {
         />
       )}
 
-      {/* Snapshot Engine for AI (runs every 2.8s) */}
+      {/* Snapshot Engine for AI (runs every 3.0s) */}
       {cameraReady && videoRef.current && (
         <SnapshotEngine
           videoElement={videoRef.current}
           onSnapshot={handleSnapshot}
-          intervalMs={2800}
-          targetWidth={512}
-          targetHeight={512}
-          quality={0.7}
+          intervalMs={3000}
+          targetWidth={480}
+          targetHeight={360}
+          quality={0.65}
           active={gameState?.phase === "playing"}
         />
       )}
@@ -222,10 +302,10 @@ export default function CameraPage() {
 
             <div>
               <h1 className="text-xl font-bold text-bone uppercase tracking-widest">
-                CCTV CAMERA SENSOR
+                {t("cctvSecurityFeed")}
               </h1>
               <p className="text-xs text-fog mt-2">
-                Mount this device facing the fast-food counter.
+                {t("allowCameraNotice")}
               </p>
             </div>
 
@@ -239,7 +319,7 @@ export default function CameraPage() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={startCamera}
+                onClick={() => startCamera(facingMode)}
                 disabled={requestingCamera}
                 className="w-full py-4 bg-amber-glow/20 border-2 border-amber-glow text-amber-glow
                            text-base uppercase tracking-widest font-bold cursor-pointer
@@ -249,12 +329,12 @@ export default function CameraPage() {
                 {requestingCamera ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Requesting Access...</span>
+                    <span>{t("connecting")}</span>
                   </>
                 ) : (
                   <>
                     <Camera className="w-5 h-5" />
-                    <span>ACTIVATE CCTV CAMERA</span>
+                    <span>{t("startCameraBtn")}</span>
                   </>
                 )}
               </button>

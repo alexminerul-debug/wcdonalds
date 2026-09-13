@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { generateRoomCode } from "@/shared/constants";
 import { Skull, LogIn, Plus, Server } from "lucide-react";
 import { ServerSettingsModal } from "@/components/ui/ServerSettingsModal";
+import { LanguageSelector } from "@/components/common/LanguageSelector";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -101,16 +102,19 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Top Server Settings Button */}
-      <button
-        type="button"
-        onClick={() => setServerModalOpen(true)}
-        className="fixed top-4 right-4 z-50 flex items-center gap-2 text-xs font-mono text-fog/70 hover:text-amber-glow border border-fog/20 hover:border-amber-glow/50 px-3 py-1.5 bg-void/80 transition-all cursor-pointer"
-        title="Server Settings"
-      >
-        <Server className="w-3.5 h-3.5 text-amber-glow" />
-        <span className="hidden sm:inline">Server</span>
-      </button>
+      {/* Top Header Actions */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 font-mono">
+        <LanguageSelector />
+        <button
+          type="button"
+          onClick={() => setServerModalOpen(true)}
+          className="flex items-center gap-2 text-xs text-fog/70 hover:text-amber-glow border border-fog/20 hover:border-amber-glow/50 px-3 py-1 bg-void/80 rounded transition-all cursor-pointer"
+          title="Server Settings"
+        >
+          <Server className="w-3.5 h-3.5 text-amber-glow" />
+          <span className="hidden sm:inline">Server</span>
+        </button>
+      </div>
 
       {/* Footer */}
       <div className="absolute bottom-6 text-fog/30 text-xs tracking-widest uppercase select-none pointer-events-none">

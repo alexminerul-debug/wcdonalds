@@ -937,7 +937,14 @@ export default class WcDonaldsServer implements Party.Server {
       } as ServerMessage)
     );
 
+    this.workerState.cart = [];
     this.broadcastState();
+
+    setTimeout(() => {
+      if (this.currentTurn && this.currentTurn.phase === "resolved") {
+        this.advanceTurn();
+      }
+    }, 3000);
   }
 
   private handleReportAnomaly(conn: Party.Connection) {
@@ -981,7 +988,14 @@ export default class WcDonaldsServer implements Party.Server {
       } as ServerMessage)
     );
 
+    this.workerState.cart = [];
     this.broadcastState();
+
+    setTimeout(() => {
+      if (this.currentTurn && this.currentTurn.phase === "resolved") {
+        this.advanceTurn();
+      }
+    }, 3000);
   }
 
   private handleNextCustomer(conn: Party.Connection) {
