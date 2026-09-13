@@ -53,6 +53,8 @@ export function useWebRTC(
 
     if (viewerRef.current) {
       viewerRef.current.updateSocket(socket);
+      // Ensure watchdog is running even on reconnect
+      resetWatchdog();
       return;
     }
 
@@ -64,6 +66,11 @@ export function useWebRTC(
     };
 
     viewerRef.current = viewer;
+
+    // Show canvas optimistically (it will revert to 'disconnected' via
+    // watchdog if no frames arrive within 8 seconds)
+    setConnectionMode('canvas');
+    resetWatchdog();
 
     // Notify room that a viewer joined so camera can emit a frame immediately
     try {

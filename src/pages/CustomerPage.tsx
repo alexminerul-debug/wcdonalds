@@ -77,10 +77,17 @@ export default function CustomerPage() {
         }
       : null);
 
+  // If a payment request was received OR current turn is in payment phase,
+  // show payment modal to the customer without fragile ID checks
+  const isEligibleCustomer =
+    isMyActiveTurn ||
+    isOnlyCustomer ||
+    !currentTurn ||
+    currentTurn.playerId === myId ||
+    !currentTurn.playerId?.startsWith("npc");
+
   const shouldShowPayment = Boolean(
-    activePayment &&
-      (isPaymentPhase || paymentRequest) &&
-      (isMyActiveTurn || isOnlyCustomer || !currentTurn || currentTurn.playerId === myId || !currentTurn.playerId?.startsWith("npc"))
+    activePayment && (paymentRequest || isPaymentPhase) && isEligibleCustomer
   );
 
   // When payment is requested, automatically dismiss blocking overlays

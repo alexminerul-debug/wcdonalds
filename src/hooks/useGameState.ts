@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { PartySocket } from 'partysocket';
 import {
   GameRoomState,
@@ -31,6 +31,13 @@ export function useGameState(socket: PartySocket | null) {
   const [lastResult, setLastResult] = useState<TurnResult | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cctvGlitch, setCctvGlitch] = useState<{ effect: "static" | "blackout" | "distortion"; isAnomaly: boolean } | null>(null);
+
+  // Use refs so the message handler can access the latest values
+  // without needing to be recreated (which was the root of the payment bug)
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
+  const myIdRef = useRef(myId);
+  myIdRef.current = myId;
 
   useEffect(() => {
     if (socket) {
@@ -72,7 +79,8 @@ export function useGameState(socket: PartySocket | null) {
             } else if (msg.state.currentTurn?.phase !== 'payment') {
               setPaymentRequest(null);
             }
-            const myConnId = msg.selfId || myId || socket.id;
+            const currentMyId = myIdRef.current;
+            const myConnId = msg.selfId || currentMyId || socket.id;
             if (msg.selfId) {
               setMyId(msg.selfId);
             }
@@ -84,7 +92,7 @@ export function useGameState(socket: PartySocket | null) {
             break;
 
           case 'role-assigned':
-            if (msg.playerId === myId || msg.playerId === socket.id) {
+            if (msg.playerId === myIdRef.current || msg.playerId === socket.id) {
               setMyRole(msg.role);
             }
             break;
@@ -122,7 +130,8 @@ export function useGameState(socket: PartySocket | null) {
             
           case 'cart-updated':
             setCartItems(msg.cart);
-            if (gameState) {
+            // Use ref instead of closure value to avoid recreating handler
+            if (gameStateRef.current) {
               setWorkerState(prev => ({ ...prev, cart: msg.cart }));
             }
             break;
@@ -136,7 +145,8 @@ export function useGameState(socket: PartySocket | null) {
             
           case 'game-over':
             setWorkerState(msg.workerState);
-            if (gameState) {
+            // Use ref instead of closure value to avoid recreating handler
+            if (gameStateRef.current) {
               setGameState(prev => prev ? { ...prev, phase: 'game_over', roundResults: msg.results } : null);
             }
             break;
@@ -148,7 +158,7 @@ export function useGameState(socket: PartySocket | null) {
 
     socket.addEventListener('message', handleMessage);
     return () => socket.removeEventListener('message', handleMessage);
-  }, [socket, gameState]);
+  }, [socket]); // FIXED: removed gameState — handler now uses refs
 
   return {
     gameState,

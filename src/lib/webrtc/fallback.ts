@@ -138,8 +138,9 @@ export class CanvasSnapshotViewer {
   private activeImg: HTMLImageElement;
   private isDecoding = false;
   private decodeStartTime = 0;
-  private latestFrame: { frame: string; ts: number } | null = null;
-  private lastRenderedTs = 0;
+  private latestFrame: { frame: string; seq: number } | null = null;
+  private frameSeq = 0;
+  private lastRenderedSeq = 0;
   private animFrameId: number | null = null;
   private messageHandler: (event: MessageEvent) => void;
   private destroyed = false;
@@ -203,19 +204,22 @@ export class CanvasSnapshotViewer {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "cctv-frame" && msg.frame) {
-        const now = Date.now();
-        const frameTs = typeof msg.ts === "number" ? msg.ts : now;
+        // Use a local monotonic counter for frame ordering since camera
+        // and viewer devices may have different system clocks (clock skew).
+        // We NEVER compare msg.ts against local Date.now() — that was the
+        // root cause of the freeze bug (any clock difference > threshold
+        // caused every frame to be silently dropped).
+        this.frameSeq++;
+        const frameSeq = this.frameSeq;
 
-        // Drop stale frames: older than 450ms or older than already rendered
-        if (msg.ts && now - msg.ts > 450) {
-          return;
-        }
-        if (frameTs <= this.lastRenderedTs) {
+        // Only drop frames that are older than what we've already rendered
+        // (using our own monotonic sequence, not cross-device timestamps)
+        if (frameSeq <= this.lastRenderedSeq) {
           return;
         }
 
         // Store ONLY the newest frame, superseding any un-rendered prior frame
-        this.latestFrame = { frame: msg.frame, ts: frameTs };
+        this.latestFrame = { frame: msg.frame, seq: frameSeq };
       }
     } catch {}
   }
@@ -235,7 +239,7 @@ export class CanvasSnapshotViewer {
       if (!this.isDecoding && this.latestFrame) {
         const toRender = this.latestFrame;
         this.latestFrame = null;
-        this.lastRenderedTs = toRender.ts;
+        this.lastRenderedSeq = toRender.seq;
         this.isDecoding = true;
         this.decodeStartTime = now;
         this.activeImg.src = toRender.frame;
