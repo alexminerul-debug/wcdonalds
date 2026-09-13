@@ -152,6 +152,9 @@ export default function WorkerPage() {
   };
 
   const handlePurchaseAbility = (abilityId: string) => {
+    try {
+      SoundEngine.getInstance().playCashRegister();
+    } catch {}
     sendMessage({ type: 'purchase-ability', abilityId });
   };
 
@@ -233,38 +236,46 @@ export default function WorkerPage() {
         </div>
       </header>
 
+      {/* Mobile & Desktop View Mode Tabs Navigation */}
+      <div className="flex bg-void border-b border-smoke/30 shrink-0 px-2 z-10">
+        {(['pos', 'shop', 'codex', 'cctv'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={clsx(
+              "py-2 px-3 text-xs font-mono font-bold transition-colors uppercase border-b-2 flex items-center gap-1.5 cursor-pointer",
+              activeTab === tab 
+                ? "border-amber-glow text-amber-glow bg-abyss" 
+                : "border-transparent text-ash hover:text-bone hover:bg-smoke/5",
+              // CCTV tab only visible on mobile (since on desktop CCTV is pinned on right)
+              tab === 'cctv' && "md:hidden"
+            )}
+          >
+            {tab === 'pos' ? t('posTab') : tab === 'cctv' ? t('cctvTab') : tab === 'shop' ? t('shopTab') : t('codexTab')}
+            {tab === 'shop' && <span className="text-[10px] text-safe font-normal ml-1">${workerState?.balance.toFixed(0)}</span>}
+          </button>
+        ))}
+      </div>
+
       {/* Main Content Area - Fits Exactly in One Screen on Desktop without page scroll */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
-        
-        {/* Mobile & Desktop View Mode Tabs Navigation */}
-        <div className="flex bg-void border-b border-smoke/30 shrink-0 px-2">
-          {(['pos', 'shop', 'codex', 'cctv'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={clsx(
-                "py-2 px-3 text-xs font-mono font-bold transition-colors uppercase border-b-2 flex items-center gap-1.5",
-                activeTab === tab 
-                  ? "border-amber-glow text-amber-glow bg-abyss" 
-                  : "border-transparent text-ash hover:text-bone hover:bg-smoke/5",
-                // CCTV tab only visible on mobile (since on desktop CCTV is pinned on right)
-                tab === 'cctv' && "md:hidden"
-              )}
-            >
-              {tab === 'pos' ? t('posTab') : tab === 'cctv' ? t('cctvTab') : tab === 'shop' ? t('shopTab') : t('codexTab')}
-              {tab === 'shop' && <span className="text-[10px] text-safe font-normal">${workerState?.balance.toFixed(0)}</span>}
-            </button>
-          ))}
-        </div>
-
         {/* Desktop Left Column / Mobile Active Tab */}
         <div className={clsx(
           "flex-1 flex flex-col p-2 md:p-3 gap-3 overflow-hidden min-h-0",
           activeTab === 'cctv' && "hidden md:flex"
         )}>
           <div className="flex-1 overflow-hidden min-h-0">
-             {activeTab === 'pos' || (activeTab === 'cctv' && window.innerWidth >= 768) ? (
-                 <POSRegister 
+             {activeTab === 'shop' ? (
+                <AbilityShop 
+                  balance={workerState?.balance || 0}
+                  ownedAbilities={workerState?.abilities || []}
+                  lives={workerState?.lives || 3}
+                  onPurchase={handlePurchaseAbility}
+                />
+             ) : activeTab === 'codex' ? (
+                <AnomalyCodex />
+             ) : (
+                <POSRegister 
                   sendMessage={sendMessage}
                   cartItems={cartItems.length > 0 ? cartItems : (workerState?.cart || [])}
                   workerBalance={workerState?.balance || 0}
@@ -272,15 +283,6 @@ export default function WorkerPage() {
                   isPaymentPending={currentTurn?.phase === 'payment'}
                   allowedItemIds={currentTurn?.assignedOrder ? currentTurn.assignedOrder.map(i => i.id) : null}
                 />
-             ) : activeTab === 'shop' ? (
-                <AbilityShop 
-                  balance={workerState?.balance || 0}
-                  ownedAbilities={workerState?.abilities || []}
-                  lives={workerState?.lives || 3}
-                  onPurchase={handlePurchaseAbility}
-                />
-             ) : (
-                <AnomalyCodex />
              )}
           </div>
         </div>

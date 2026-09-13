@@ -135,7 +135,7 @@ class GameRoom {
     this.lastAiSnapshotTime = 0;
     this.workerState = {
       cart: [],
-      balance: 0,
+      balance: 250,
       lives: 3,
       abilities: [],
       totalServed: 0,
@@ -166,7 +166,7 @@ class GameRoom {
       currentTurn: this.currentTurn,
       workerState: this.workerState,
       roundResults: this.roundResults || [],
-      config: { maxPlayers: 10, anomalyProbability: 0.35, minAnomalies: 1, maxAnomalyRatio: 0.5, turnTimeLimit: 0, startingLives: 3, startingBalance: 0 },
+      config: { maxPlayers: 10, anomalyProbability: 0.35, minAnomalies: 1, maxAnomalyRatio: 0.5, turnTimeLimit: 0, startingLives: 3, startingBalance: 250 },
       currentNight: this.currentNight || 1,
       maxNights: this.maxNights || 5,
       nightTime: this.nightTime || "12:00 AM",
@@ -365,7 +365,7 @@ class GameRoom {
           if (!this.cameraId) this.cameraId = id;
         }
 
-        this.workerState = { cart: [], balance: 0, lives: 3, abilities: [], totalServed: 0, totalCaught: 0 };
+        this.workerState = { cart: [], balance: this.workerState.balance > 0 ? this.workerState.balance : 250, lives: 3, abilities: [], totalServed: 0, totalCaught: 0 };
         this.startNight(1);
         break;
       }

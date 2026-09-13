@@ -107,7 +107,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   maxAnomalyRatio: 0.5,
   turnTimeLimit: 0,       // 0 = no limit
   startingLives: 3,
-  startingBalance: 0,
+  startingBalance: 250,
 };
 
 // ============================================

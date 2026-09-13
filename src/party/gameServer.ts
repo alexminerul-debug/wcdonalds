@@ -96,7 +96,7 @@ const DEFAULT_CONFIG: GameConfig = {
   maxAnomalyRatio: 0.5,
   turnTimeLimit: 0,
   startingLives: 3,
-  startingBalance: 0,
+  startingBalance: 250,
 };
 
 // ============================================
@@ -1213,7 +1213,7 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- Ability Shop ----------
   private handlePurchaseAbility(conn: Party.Connection, abilityId: string) {
-    if (conn.id !== this.workerId && conn.id !== this.hostId) return;
+    if (this.workerId && conn.id !== this.workerId && conn.id !== this.hostId) return;
 
     const abilities: Record<string, { price: number; id: string }> = {
       "extra-life": { price: 100, id: "extra-life" },
@@ -1259,11 +1259,11 @@ export default class WcDonaldsServer implements Party.Server {
       this.stabiliserTurnsLeft = 3;
     }
 
-    sendTo(conn, {
+    this.room.broadcast(JSON.stringify({
       type: "ability-purchased",
       abilityId,
       balance: this.workerState.balance,
-    });
+    }));
     this.broadcastState();
   }
 
