@@ -473,6 +473,9 @@ export default class WcDonaldsServer implements Party.Server {
       case "purchase-ability":
         this.handlePurchaseAbility(sender, msg.abilityId);
         break;
+      case "trigger-hack-customer":
+        this.triggerHackCustomer();
+        break;
       case "next-customer":
         this.handleNextCustomer(sender);
         break;
@@ -1210,13 +1213,17 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- Ability Shop ----------
   private handlePurchaseAbility(conn: Party.Connection, abilityId: string) {
-    if (conn.id !== this.workerId) return;
+    if (conn.id !== this.workerId && conn.id !== this.hostId) return;
 
     const abilities: Record<string, { price: number; id: string }> = {
-      "extra-life": { price: 350, id: "extra-life" },
+      "extra-life": { price: 100, id: "extra-life" },
+      "hack-customer": { price: 50, id: "hack-customer" },
       "uv-scanner": { price: 20, id: "uv-scanner" },
       "spectral-analyzer": { price: 35, id: "spectral-analyzer" },
       "static-stabilizer": { price: 15, id: "static-stabilizer" },
+      "neural-enhancer": { price: 60, id: "neural-enhancer" },
+      "polygraph-tape": { price: 45, id: "polygraph-tape" },
+      "xray-monocle": { price: 40, id: "xray-monocle" },
     };
 
     const ability = abilities[abilityId];
@@ -1228,11 +1235,17 @@ export default class WcDonaldsServer implements Party.Server {
 
     if (abilityId === "extra-life") {
       if (this.workerState.lives >= 5) {
-        sendTo(conn, { type: "error", message: "Maximum lives (5) already reached" });
+        sendTo(conn, { type: "error", message: "Maximum hearts (5) already reached" });
         return;
       }
       this.workerState.balance -= ability.price;
       this.workerState.lives = (this.workerState.lives || 3) + 1;
+    } else if (abilityId === "hack-customer") {
+      this.workerState.balance -= ability.price;
+      if (!this.workerState.abilities.includes("hack-customer")) {
+        this.workerState.abilities.push("hack-customer");
+      }
+      this.triggerHackCustomer();
     } else {
       if (this.workerState.abilities.includes(abilityId)) {
         sendTo(conn, { type: "error", message: "Already owned" });
@@ -1252,6 +1265,22 @@ export default class WcDonaldsServer implements Party.Server {
       balance: this.workerState.balance,
     });
     this.broadcastState();
+  }
+
+  private triggerHackCustomer() {
+    const customerId = this.currentTurn?.playerId;
+    const traits = this.currentTurn?.anomalyTraits || (customerId ? this.secretTraits.get(customerId) : null) || null;
+    const secretRole = (customerId ? this.secretRoles.get(customerId) : this.currentTurn?.secretRole) || "normal";
+
+    this.room.broadcast(
+      JSON.stringify({
+        type: "hack-customer-alert",
+        durationMs: 3000,
+        customerId: customerId || "",
+        traits,
+        secretRole,
+      } as ServerMessage)
+    );
   }
 
   // ---------- AI Vision ----------

@@ -11,6 +11,7 @@ interface POSRegisterProps {
   workerBalance: number;
   currentCustomerName: string | null;
   isPaymentPending: boolean;
+  allowedItemIds?: string[] | null;
 }
 
 export function POSRegister({
@@ -19,6 +20,7 @@ export function POSRegister({
   workerBalance,
   currentCustomerName,
   isPaymentPending,
+  allowedItemIds,
 }: POSRegisterProps) {
   const { t } = useTranslation();
   const [localCart, setLocalCart] = useState<CartItem[]>(serverCartItems || []);
@@ -31,6 +33,11 @@ export function POSRegister({
   }, [serverCartItems]);
 
   const handleAddItem = (menuItemId: string) => {
+    // Enforce: worker can only put the correct items in an order
+    if (allowedItemIds && allowedItemIds.length > 0 && !allowedItemIds.includes(menuItemId)) {
+      return;
+    }
+
     const item = MENU_ITEMS.find((m) => m.id === menuItemId);
     if (item) {
       setLocalCart((prev) => {
@@ -94,7 +101,7 @@ export function POSRegister({
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         <div className="flex-1 overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-smoke/30">
-          <MenuGrid onAddItem={handleAddItem} />
+          <MenuGrid onAddItem={handleAddItem} allowedItemIds={allowedItemIds} />
         </div>
         <div className="w-full md:w-80 h-64 md:h-full flex-shrink-0">
           <Cart 

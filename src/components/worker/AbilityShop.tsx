@@ -27,52 +27,62 @@ export function AbilityShop({ balance, ownedAbilities, lives = 3, onPurchase }: 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
         {ABILITY_ITEMS.map((ability) => {
           const isExtraLife = ability.id === "extra-life";
+          const isHack = ability.id === "hack-customer";
           const isMaxLives = isExtraLife && lives >= 5;
-          const isOwned = !isExtraLife && ownedAbilities.includes(ability.id);
+          const isOwned = !isExtraLife && !isHack && ownedAbilities.includes(ability.id);
           const canAfford = balance >= ability.price;
           const isDisabled = isMaxLives || isOwned || !canAfford;
 
           return (
-            <div key={ability.id} className="flex flex-col p-4 bg-abyss border border-smoke/20 rounded gap-3">
+            <div key={ability.id} className="flex flex-col p-3 bg-abyss border border-smoke/20 rounded gap-2">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">{ability.emoji}</span>
+                  <span className="text-2xl">{ability.emoji}</span>
                   <div>
-                    <h3 className="font-mono text-bone text-sm font-bold">{ability.name}</h3>
+                    <h3 className="font-mono text-bone text-xs md:text-sm font-bold">{ability.name}</h3>
                     <div className="font-mono text-amber-glow text-xs">${ability.price} COINS</div>
                   </div>
                 </div>
                 {ability.duration && (
-                  <span className="font-mono text-[10px] bg-smoke/20 text-ash px-2 py-1 rounded">
+                  <span className="font-mono text-[10px] bg-smoke/20 text-ash px-2 py-0.5 rounded">
                     {ability.duration} TURNS
                   </span>
                 )}
                 {isExtraLife && (
-                  <span className="font-mono text-[10px] bg-blood/20 text-blood-bright px-2 py-1 rounded border border-blood/30">
+                  <span className="font-mono text-[10px] bg-blood/20 text-blood-bright px-2 py-0.5 rounded border border-blood/30">
                     MAX 5 LIVES
+                  </span>
+                )}
+                {isHack && (
+                  <span className="font-mono text-[10px] bg-amber-glow/20 text-amber-glow px-2 py-0.5 rounded border border-amber-glow/30 animate-pulse">
+                    INSTANT BREACH
                   </span>
                 )}
               </div>
               
-              <p className="font-mono text-xs text-ash">{ability.description}</p>
+              <p className="font-mono text-xs text-ash leading-relaxed">{ability.description}</p>
               
               <HorrorButton
                 variant={isOwned ? "safe" : isMaxLives ? "ghost" : "primary"}
                 size="sm"
                 disabled={isDisabled}
                 onClick={() => onPurchase(ability.id)}
-                className="w-full mt-2"
+                className="w-full mt-1 py-1.5 text-xs font-bold"
               >
                 {isMaxLives ? (
                   'MAX LIVES REACHED'
                 ) : isOwned ? (
                   <>
-                    <Check className="w-4 h-4" /> ACTIVE
+                    <Check className="w-3.5 h-3.5" /> ACTIVE
                   </>
                 ) : !canAfford ? (
                   `NEED $${ability.price}`
+                ) : isHack ? (
+                  `HACK PHONE NOW ($${ability.price})`
+                ) : isExtraLife ? (
+                  `RESTORE +1 HEART ($${ability.price})`
                 ) : (
-                  isExtraLife ? `RESTORE +1 LIFE ($${ability.price})` : `PURCHASE ($${ability.price})`
+                  `PURCHASE ($${ability.price})`
                 )}
               </HorrorButton>
             </div>

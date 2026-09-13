@@ -30,6 +30,22 @@ export function CCTVFeed({
   const isDisconnected = connectionMode === 'disconnected';
   const glitchEffect = hasStabilizer && cctvGlitch?.effect === 'blackout' ? 'distortion' : cctvGlitch?.effect;
 
+  // 50% chance roll whenever night vision is toggled on or glitch arrives for anomaly customer
+  const [nightVisionGlitchActive, setNightVisionGlitchActive] = React.useState(false);
+
+  React.useEffect(() => {
+    if (nightVisionOn && isAnomaly) {
+      // 50% chance to trigger extra distortion/glitch effects on night vision
+      const roll = Math.random() < 0.50;
+      setNightVisionGlitchActive(roll);
+    } else {
+      setNightVisionGlitchActive(false);
+    }
+  }, [nightVisionOn, isAnomaly, cctvGlitch]);
+
+  const shouldShowGlitch = (isAnomaly && !!cctvGlitch) || (isAnomaly && nightVisionOn && nightVisionGlitchActive);
+  const activeEffect = glitchEffect || (nightVisionGlitchActive ? "distortion" : null);
+
   return (
     <div className="relative w-full aspect-video bg-black border-2 border-smoke/50 rounded overflow-hidden">
       {/* Base Feed */}
@@ -66,8 +82,8 @@ export function CCTVFeed({
           <NightVisionOverlay active={nightVisionOn} />
           
           <GlitchEffects 
-            active={isAnomaly && !!cctvGlitch} 
-            effect={glitchEffect || null} 
+            active={shouldShowGlitch} 
+            effect={activeEffect} 
             isBloodMoon={isBloodMoon}
           />
 

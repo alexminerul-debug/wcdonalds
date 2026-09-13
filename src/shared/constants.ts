@@ -38,10 +38,17 @@ export const MENU_ITEMS: MenuItem[] = [
 export const ABILITY_ITEMS: AbilityItem[] = [
   {
     id: "extra-life",
-    name: "Sanity Restoration (+1 Life)",
-    description: "Emergency adrenaline injection. Restores 1 lost life (max 5 lives).",
-    price: 350,
+    name: "Sanity Restoration (+1 Heart)",
+    description: "Emergency adrenaline injection. Restores 1 lost heart/life (max 5 lives).",
+    price: 100,
     emoji: "❤️",
+  },
+  {
+    id: "hack-customer",
+    name: "Hack Customer (Terminal Breach)",
+    description: "Forces a cyber-breach on customer's phone! Worker mirrors customer's screen for 3s to inspect hidden traits.",
+    price: 50,
+    emoji: "💻",
   },
   {
     id: "uv-scanner",
@@ -64,6 +71,27 @@ export const ABILITY_ITEMS: AbilityItem[] = [
     price: 15,
     emoji: "📡",
     duration: 3,
+  },
+  {
+    id: "neural-enhancer",
+    name: "Neural Anomaly Predictor",
+    description: "Neural net implant that highlights high-risk body zones directly in CCTV view.",
+    price: 60,
+    emoji: "🧠",
+  },
+  {
+    id: "polygraph-tape",
+    name: "Vocal Stress Polygraph",
+    description: "Real-time biometric stress readout measuring customer acoustic jitter.",
+    price: 45,
+    emoji: "📈",
+  },
+  {
+    id: "xray-monocle",
+    name: "Abyssal X-Ray Monocle",
+    description: "High-contrast night-vision booster revealing skeletal posture shifts.",
+    price: 40,
+    emoji: "👁️",
   },
 ];
 

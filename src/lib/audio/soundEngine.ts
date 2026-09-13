@@ -196,7 +196,161 @@ export class SoundEngine {
     osc.stop(now + 0.15);
   }
 
+  // Cyber terminal breach / modem glitch sound
+  public playTerminalHacking() {
+    if (!this.context || !this.masterGain) return;
+    this.resume();
+    const now = this.context.currentTime;
+
+    for (let i = 0; i < 8; i++) {
+      const startTime = now + i * 0.08;
+      const osc = this.context.createOscillator();
+      const gain = this.context.createGain();
+      osc.type = i % 2 === 0 ? 'square' : 'sawtooth';
+      const freq = 300 + Math.random() * 1600;
+      osc.frequency.setValueAtTime(freq, startTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, startTime + 0.07);
+
+      gain.gain.setValueAtTime(0.15, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.07);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(startTime);
+      osc.stop(startTime + 0.07);
+    }
+  }
+
+  // Screen shattering / glass break sound effect
+  public playGlassShatter() {
+    if (!this.context || !this.masterGain) return;
+    this.resume();
+    const now = this.context.currentTime;
+
+    // White noise explosion burst
+    const bufferSize = Math.floor(this.context.sampleRate * 0.5);
+    const buffer = this.context.createBuffer(1, bufferSize, this.context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.context.sampleRate * 0.12));
+    }
+    const noise = this.context.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseGain = this.context.createGain();
+    noiseGain.gain.setValueAtTime(0.7, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+
+    noise.connect(noiseGain);
+    noiseGain.connect(this.masterGain);
+    noise.start(now);
+
+    // High pitched crystal shards
+    [2400, 3100, 4200, 5600].forEach((freq, idx) => {
+      if (!this.context || !this.masterGain) return;
+      const shardOsc = this.context.createOscillator();
+      const shardGain = this.context.createGain();
+      shardOsc.type = 'triangle';
+      shardOsc.frequency.setValueAtTime(freq + Math.random() * 400, now + idx * 0.04);
+
+      shardGain.gain.setValueAtTime(0.2, now + idx * 0.04);
+      shardGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      shardOsc.connect(shardGain);
+      shardGain.connect(this.masterGain);
+      shardOsc.start(now + idx * 0.04);
+      shardOsc.stop(now + 0.35);
+    });
+  }
+
+  public playPuzzleSuccess() {
+    if (!this.context || !this.masterGain) return;
+    this.resume();
+    const now = this.context.currentTime;
+    [440, 554.37, 659.25, 880].forEach((freq, idx) => {
+      if (!this.context || !this.masterGain) return;
+      const osc = this.context.createOscillator();
+      const gain = this.context.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+      gain.gain.setValueAtTime(0.25, now + idx * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now + idx * 0.08);
+      osc.stop(now + idx * 0.08 + 0.25);
+    });
+  }
+
+  public playPuzzleFail() {
+    if (!this.context || !this.masterGain) return;
+    this.resume();
+    const now = this.context.currentTime;
+    const osc = this.context.createOscillator();
+    const gain = this.context.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.linearRampToValueAtTime(110, now + 0.4);
+    gain.gain.setValueAtTime(0.35, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  }
+
+  // Procedural creepy dark-ambient background drone
+  private bgmGain: GainNode | null = null;
+  private bgmOscs: OscillatorNode[] = [];
+  private isBgmPlaying = false;
+
+  public startAtmosphereMusic() {
+    if (this.isBgmPlaying || !this.context) return;
+    this.resume();
+    try {
+      this.bgmGain = this.context.createGain();
+      this.bgmGain.gain.setValueAtTime(0.001, this.context.currentTime);
+      this.bgmGain.gain.linearRampToValueAtTime(0.06, this.context.currentTime + 3);
+
+      if (this.masterGain) {
+        this.bgmGain.connect(this.masterGain);
+      }
+
+      // Low ominous dissonant drone notes (55Hz A1, 58Hz Bb1, 82Hz E2)
+      const freqs = [55, 58.27, 82.41, 110];
+      this.bgmOscs = freqs.map((freq) => {
+        const osc = this.context!.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, this.context!.currentTime);
+        osc.connect(this.bgmGain!);
+        osc.start();
+        return osc;
+      });
+
+      this.isBgmPlaying = true;
+    } catch (e) {
+      console.error("Failed to start background music", e);
+    }
+  }
+
+  public stopAtmosphereMusic() {
+    if (!this.isBgmPlaying) return;
+    try {
+      if (this.bgmGain && this.context) {
+        this.bgmGain.gain.linearRampToValueAtTime(0.001, this.context.currentTime + 1);
+        setTimeout(() => {
+          this.bgmOscs.forEach(o => {
+            try { o.stop(); o.disconnect(); } catch {}
+          });
+          this.bgmOscs = [];
+          this.isBgmPlaying = false;
+        }, 1000);
+      }
+    } catch {}
+  }
+
   public dispose() {
+    this.stopAtmosphereMusic();
     if (this.context) {
       this.context.close();
       this.context = null;

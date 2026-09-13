@@ -537,10 +537,14 @@ class GameRoom {
       case "purchase-ability": {
         const abilityId = msg.abilityId;
         const prices = {
-          "extra-life": 350,
+          "extra-life": 100,
+          "hack-customer": 50,
           "uv-scanner": 20,
           "spectral-analyzer": 35,
           "static-stabilizer": 15,
+          "neural-enhancer": 60,
+          "polygraph-tape": 45,
+          "xray-monocle": 40,
         };
         const price = prices[abilityId];
         if (price === undefined) break;
@@ -557,12 +561,20 @@ class GameRoom {
           if (this.workerState.lives >= 5) {
             const ws = this.connections.get(id);
             if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "error", message: "Maximum lives (5) already reached" }));
+              ws.send(JSON.stringify({ type: "error", message: "Maximum hearts (5) already reached" }));
             }
             break;
           }
           this.workerState.balance -= price;
           this.workerState.lives = (this.workerState.lives || 3) + 1;
+        } else if (abilityId === "hack-customer") {
+          // Can be purchased repeatedly per turn or when needed!
+          this.workerState.balance -= price;
+          if (!this.workerState.abilities.includes("hack-customer")) {
+            this.workerState.abilities.push("hack-customer");
+          }
+          // Immediately trigger the hack breach!
+          this.triggerHackCustomer();
         } else {
           if (this.workerState.abilities.includes(abilityId)) {
             const ws = this.connections.get(id);
@@ -581,6 +593,11 @@ class GameRoom {
           balance: this.workerState.balance,
         });
         this.broadcastState();
+        break;
+      }
+
+      case "trigger-hack-customer": {
+        this.triggerHackCustomer();
         break;
       }
 
@@ -689,6 +706,20 @@ class GameRoom {
         break;
       }
     }
+  }
+
+  triggerHackCustomer() {
+    const customerId = this.currentTurn?.playerId;
+    const traits = this.currentTurn?.anomalyTraits || (customerId ? this.secretTraits.get(customerId) : null) || null;
+    const secretRole = (customerId ? this.secretRoles.get(customerId) : this.currentTurn?.secretRole) || "normal";
+
+    this.broadcast({
+      type: "hack-customer-alert",
+      durationMs: 3000,
+      customerId: customerId || "",
+      traits,
+      secretRole,
+    });
   }
 
   startNight(nightNumber) {

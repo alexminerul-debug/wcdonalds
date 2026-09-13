@@ -19,6 +19,7 @@ import { GlitchText } from "@/components/ui/GlitchText";
 import { LanguageSelector } from "@/components/common/LanguageSelector";
 import { LeaveRoomButton } from "@/components/common/LeaveRoomButton";
 import { NightCutsceneModal } from "@/components/common/NightCutsceneModal";
+import { CustomerHackOverlay } from "@/components/common/CustomerHackOverlay";
 import { Moon, Clock, Skull, CheckCircle, ArrowRight } from "lucide-react";
 
 export default function CustomerPage() {
@@ -30,6 +31,7 @@ export default function CustomerPage() {
   const [prevTurnIndex, setPrevTurnIndex] = useState(-1);
   const [showNightCutscene, setShowNightCutscene] = useState(false);
   const [lastCutsceneNight, setLastCutsceneNight] = useState<number | null>(null);
+  const [isHacked, setIsHacked] = useState(false);
 
   const { socket, sendMessage, connectionStatus } = useGameSocket(code || "");
   const {
@@ -44,7 +46,15 @@ export default function CustomerPage() {
     detectedTraits,
     paymentRequest,
     lastResult,
+    hackAlert,
   } = useGameState(socket);
+
+  // When hackAlert arrives and matches this customer (or solo player)
+  useEffect(() => {
+    if (hackAlert && (hackAlert.customerId === myId || !hackAlert.customerId || isMyActiveTurn)) {
+      setIsHacked(true);
+    }
+  }, [hackAlert, myId]);
 
   // Ensure Customer registers identity and claims role on mount/reconnect
   useEffect(() => {
@@ -431,6 +441,13 @@ export default function CustomerPage() {
 
   return (
     <>
+      {isHacked && (
+        <CustomerHackOverlay
+          durationMs={hackAlert?.durationMs || 3000}
+          onDismiss={() => setIsHacked(false)}
+        />
+      )}
+
       {showNightCutscene && (
         <NightCutsceneModal
           nightNumber={gameState?.currentNight || 1}

@@ -12,16 +12,19 @@ import { JumpscareOverlay } from '@/components/worker/JumpscareOverlay';
 import { LanguageSelector } from '@/components/common/LanguageSelector';
 import { LeaveRoomButton } from '@/components/common/LeaveRoomButton';
 import { NightCutsceneModal } from '@/components/common/NightCutsceneModal';
-import { Heart, Moon, Skull } from 'lucide-react';
+import { Heart, Moon, Skull, Volume2, VolumeX } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useTranslation } from '@/lib/i18n';
 import { safeStorage } from '@/lib/storage';
+import { SoundEngine } from '@/lib/audio/soundEngine';
+import { WorkerHackTerminalModal } from '@/components/common/WorkerHackTerminalModal';
+import { WorkerPuzzleModal } from '@/components/worker/WorkerPuzzleModal';
 
 export default function WorkerPage() {
   const { code } = useParams<{ code: string }>();
   const { t } = useTranslation();
   const { socket, sendMessage } = useGameSocket(code || '');
-  const { gameState, currentTurn, cctvGlitch, workerState, cartItems } = useGameState(socket);
+  const { gameState, currentTurn, cctvGlitch, workerState, cartItems, hackAlert } = useGameState(socket);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -33,6 +36,9 @@ export default function WorkerPage() {
   const [showJumpscare, setShowJumpscare] = useState(false);
   const [showNightCutscene, setShowNightCutscene] = useState(false);
   const [lastCutsceneNight, setLastCutsceneNight] = useState<number | null>(null);
+  const [showHackModal, setShowHackModal] = useState(false);
+  const [activePuzzle, setActivePuzzle] = useState<{ pendingAction: 'serve' | 'report' } | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
 
   // Auto-register as Worker on mount / connect
   useEffect(() => {
@@ -79,12 +85,70 @@ export default function WorkerPage() {
     }
   }, [currentTurn?.result]);
 
+  // Listen for hackAlert to display Worker Terminal Mirror
+  useEffect(() => {
+    if (hackAlert) {
+      setShowHackModal(true);
+    }
+  }, [hackAlert]);
+
+  // Start background atmospheric audio on first interaction
+  useEffect(() => {
+    if (!isMuted && gameState?.phase === 'playing') {
+      try {
+        SoundEngine.getInstance().startAtmosphereMusic();
+      } catch {}
+    } else {
+      try {
+        SoundEngine.getInstance().stopAtmosphereMusic();
+      } catch {}
+    }
+    return () => {
+      try {
+        SoundEngine.getInstance().stopAtmosphereMusic();
+      } catch {}
+    };
+  }, [isMuted, gameState?.phase]);
+
+  // 35% chance to trigger an emergency security override puzzle when reporting/serving
   const handleServe = () => {
-    sendMessage({ type: 'serve-order' });
+    // If lives are low (<= 2) or random 35% hazard occurs, trigger puzzle override
+    const shouldTriggerPuzzle = Math.random() < 0.35 && !activePuzzle;
+    if (shouldTriggerPuzzle) {
+      setActivePuzzle({ pendingAction: 'serve' });
+    } else {
+      sendMessage({ type: 'serve-order' });
+    }
   };
 
   const handleReport = () => {
-    sendMessage({ type: 'report-anomaly' });
+    const shouldTriggerPuzzle = Math.random() < 0.35 && !activePuzzle;
+    if (shouldTriggerPuzzle) {
+      setActivePuzzle({ pendingAction: 'report' });
+    } else {
+      sendMessage({ type: 'report-anomaly' });
+    }
+  };
+
+  const handlePuzzleSuccess = () => {
+    const action = activePuzzle?.pendingAction;
+    setActivePuzzle(null);
+    if (action === 'serve') {
+      sendMessage({ type: 'serve-order' });
+    } else if (action === 'report') {
+      sendMessage({ type: 'report-anomaly' });
+    }
+  };
+
+  const handlePuzzleFail = () => {
+    const action = activePuzzle?.pendingAction;
+    setActivePuzzle(null);
+    // On fail, send action anyway, and worker loses a life
+    if (action === 'serve') {
+      sendMessage({ type: 'serve-order' });
+    } else if (action === 'report') {
+      sendMessage({ type: 'report-anomaly' });
+    }
   };
 
   const handlePurchaseAbility = (abilityId: string) => {
@@ -104,8 +168,26 @@ export default function WorkerPage() {
   }, [gameState?.phase, gameState?.currentNight, lastCutsceneNight]);
 
   return (
-    <div className="min-h-screen bg-black flex flex-col font-mono text-bone overflow-hidden selection:bg-blood/30">
+    <div className="h-screen w-screen bg-black flex flex-col font-mono text-bone overflow-hidden selection:bg-blood/30">
       <JumpscareOverlay active={showJumpscare} onDismiss={() => setShowJumpscare(false)} />
+
+      {/* Emergency Worker Security Puzzle Event */}
+      {activePuzzle && (
+        <WorkerPuzzleModal
+          onSuccess={handlePuzzleSuccess}
+          onFail={handlePuzzleFail}
+        />
+      )}
+
+      {/* Hack Customer Terminal Mirror Modal */}
+      {showHackModal && (
+        <WorkerHackTerminalModal
+          durationMs={hackAlert?.durationMs || 3000}
+          traits={hackAlert?.traits || null}
+          secretRole={hackAlert?.secretRole || "normal"}
+          onDismiss={() => setShowHackModal(false)}
+        />
+      )}
 
       {showNightCutscene && (
         <NightCutsceneModal
@@ -136,6 +218,13 @@ export default function WorkerPage() {
         </div>
 
         <div className="flex items-center gap-2 md:gap-3 text-xs">
+          <button
+            onClick={() => setIsMuted(!isMuted)}
+            className="p-1.5 rounded border border-smoke/30 bg-void text-ash hover:text-bone transition-colors"
+            title={isMuted ? "Unmute Audio" : "Mute Audio"}
+          >
+            {isMuted ? <VolumeX className="w-4 h-4 text-blood" /> : <Volume2 className="w-4 h-4 text-safe animate-pulse" />}
+          </button>
           <div className="text-safe bg-safe/10 px-2 py-1 rounded border border-safe/20 font-bold">
             ${workerState?.balance.toFixed(2) || '0.00'}
           </div>
@@ -144,8 +233,8 @@ export default function WorkerPage() {
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden pb-32 md:pb-24">
+      {/* Main Content Area - Fits Exactly in One Screen on Desktop without page scroll */}
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
         
         {/* Mobile & Desktop View Mode Tabs Navigation */}
         <div className="flex bg-void border-b border-smoke/30 shrink-0 px-2">
@@ -154,7 +243,7 @@ export default function WorkerPage() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={clsx(
-                "py-2.5 px-4 text-xs font-mono font-bold transition-colors uppercase border-b-2 flex items-center gap-1.5",
+                "py-2 px-3 text-xs font-mono font-bold transition-colors uppercase border-b-2 flex items-center gap-1.5",
                 activeTab === tab 
                   ? "border-amber-glow text-amber-glow bg-abyss" 
                   : "border-transparent text-ash hover:text-bone hover:bg-smoke/5",
@@ -170,10 +259,10 @@ export default function WorkerPage() {
 
         {/* Desktop Left Column / Mobile Active Tab */}
         <div className={clsx(
-          "flex-1 flex flex-col p-2 md:p-4 gap-4 overflow-y-auto custom-scrollbar",
+          "flex-1 flex flex-col p-2 md:p-3 gap-3 overflow-hidden min-h-0",
           activeTab === 'cctv' && "hidden md:flex"
         )}>
-          <div className="flex-1">
+          <div className="flex-1 overflow-hidden min-h-0">
              {activeTab === 'pos' || (activeTab === 'cctv' && window.innerWidth >= 768) ? (
                  <POSRegister 
                   sendMessage={sendMessage}
@@ -181,6 +270,7 @@ export default function WorkerPage() {
                   workerBalance={workerState?.balance || 0}
                   currentCustomerName={currentTurn?.playerName || null}
                   isPaymentPending={currentTurn?.phase === 'payment'}
+                  allowedItemIds={currentTurn?.assignedOrder ? currentTurn.assignedOrder.map(i => i.id) : null}
                 />
              ) : activeTab === 'shop' ? (
                 <AbilityShop 
@@ -197,11 +287,11 @@ export default function WorkerPage() {
 
         {/* Desktop Right Column / Mobile CCTV Tab */}
         <div className={clsx(
-          "w-full md:w-[450px] lg:w-[500px] flex-col p-2 md:p-4 gap-4 bg-void border-l border-smoke/30 shrink-0 overflow-y-auto custom-scrollbar",
+          "w-full md:w-[420px] lg:w-[460px] flex-col p-2 md:p-3 gap-2 bg-void border-l border-smoke/30 shrink-0 overflow-hidden min-h-0",
           activeTab === 'cctv' ? "flex" : "hidden md:flex"
         )}>
-          <div className="flex-1 flex flex-col gap-4">
-            <div className="relative">
+          <div className="flex-1 flex flex-col gap-2 overflow-hidden min-h-0">
+            <div className="relative shrink-0">
               <CCTVFeed
                 videoRef={videoRef}
                 canvasRef={canvasRef}
@@ -216,17 +306,17 @@ export default function WorkerPage() {
               <button
                 onClick={() => setNightVisionOn(!nightVisionOn)}
                 className={clsx(
-                  "absolute -bottom-3 right-4 p-2 rounded-full border shadow-lg transition-colors z-30",
+                  "absolute -bottom-2.5 right-3 p-1.5 rounded-full border shadow-lg transition-colors z-30",
                   nightVisionOn ? "bg-eerie/20 border-eerie text-eerie" : "bg-abyss border-smoke/30 text-ash hover:text-bone"
                 )}
                 title={t("nightVision")}
               >
-                <Moon className="w-5 h-5" />
+                <Moon className="w-4 h-4" />
               </button>
             </div>
 
             {activeTab !== 'codex' && (
-              <div className="hidden md:block flex-1">
+              <div className="hidden md:flex flex-1 overflow-hidden min-h-0">
                  <AnomalyCodex />
               </div>
             )}
@@ -235,7 +325,7 @@ export default function WorkerPage() {
       </main>
 
       {/* Fixed Decision Panel at Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-abyss">
+      <div className="shrink-0 z-40 bg-abyss border-t border-smoke/30">
         <DecisionPanel 
           onServe={handleServe}
           onReport={handleReport}

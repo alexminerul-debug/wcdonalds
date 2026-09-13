@@ -155,7 +155,8 @@ export type ClientMessage =
   | { type: "answer"; viewerId: string; sdp: unknown }
   | { type: "ice-candidate"; viewerId: string; candidate: unknown }
   | { type: "camera-ready" }
-  | { type: "webrtc-signal"; targetId: string; signal: unknown };
+  | { type: "webrtc-signal"; targetId: string; signal: unknown }
+  | { type: "trigger-hack-customer" };
 
 // ---------- Server → Client ----------
 export type ServerMessage =
@@ -163,7 +164,7 @@ export type ServerMessage =
   | { type: "room-state"; state: GameRoomState; selfId?: string }
   | { type: "role-assigned"; role: PlayerRole; playerId: string }
   | { type: "error"; message: string }
-  | { type: "shift-started"; queue: string[]; night?: number }
+  | { type: "shift-started"; queue: string[]; night?: number; isBloodMoon?: boolean }
   | { type: "turn-start"; turn: TurnState }
   | { type: "secret-role"; secretRole: SecretRole; order: MenuItem[]; traits: AnomalyTrait[] | null }
   | { type: "payment-request"; total: number; items: CartItem[] }
@@ -183,4 +184,5 @@ export type ServerMessage =
   | { type: "ice-candidate"; viewerId: string; candidate: unknown }
   | { type: "cctv-frame"; frame: string; ts?: number }
   | { type: "camera-ready" }
-  | { type: "cctv-glitch"; effect: "static" | "blackout" | "distortion" | "scanline"; isAnomaly: boolean };
+  | { type: "cctv-glitch"; effect: "static" | "blackout" | "distortion" | "scanline"; isAnomaly: boolean }
+  | { type: "hack-customer-alert"; durationMs: number; customerId: string; traits: AnomalyTrait[] | null; secretRole: SecretRole };
