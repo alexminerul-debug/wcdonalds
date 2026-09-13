@@ -54,8 +54,8 @@ export default function LobbyPage() {
     sendMessage({ type: "claim-role", role });
   };
 
-  const handleStartShift = () => {
-    sendMessage({ type: "start-shift" });
+  const handleStartShift = (practiceMode: boolean = false) => {
+    sendMessage({ type: "start-shift", practiceMode });
   };
 
   const copyCode = () => {
@@ -181,6 +181,16 @@ export default function LobbyPage() {
           )}
           {myRole === "worker" && <Check className="w-5 h-5" />}
         </button>
+        {myRole === "worker" && (
+          <button
+            type="button"
+            onClick={() => navigate(`/room/${code}/worker`)}
+            className="w-full py-2.5 bg-amber-glow/20 border border-amber-glow text-amber-glow uppercase font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-glow/30 cursor-pointer transition-all"
+          >
+            <Monitor className="w-4 h-4" />
+            <span>Open Worker Counter Now &gt;&gt;</span>
+          </button>
+        )}
 
         {/* Camera */}
         <button
@@ -209,6 +219,16 @@ export default function LobbyPage() {
           )}
           {myRole === "camera" && <Check className="w-5 h-5" />}
         </button>
+        {myRole === "camera" && (
+          <button
+            type="button"
+            onClick={() => navigate(`/room/${code}/camera`)}
+            className="w-full py-2.5 bg-eerie/20 border border-eerie text-eerie uppercase font-bold text-xs flex items-center justify-center gap-2 hover:bg-eerie/30 cursor-pointer transition-all"
+          >
+            <Camera className="w-4 h-4" />
+            <span>Activate CCTV Sensor Now &gt;&gt;</span>
+          </button>
+        )}
 
         {/* Customer */}
         <button
@@ -271,10 +291,10 @@ export default function LobbyPage() {
 
       {/* Start Button (Host only) */}
       {isHost && (
-        <div className="max-w-md mx-auto">
+        <div className="max-w-md mx-auto space-y-3">
           <button
             type="button"
-            onClick={handleStartShift}
+            onClick={() => handleStartShift(false)}
             disabled={!canStart}
             className={`w-full flex items-center justify-center gap-3 px-8 py-5 text-xl uppercase tracking-widest font-bold
                        transition-all duration-300 active:scale-95 ${
@@ -287,9 +307,19 @@ export default function LobbyPage() {
             Start Shift
           </button>
           {!canStart && (
-            <p className="text-fog/40 text-xs text-center mt-3">
-              Need: 1 Worker + 1 Camera + at least 1 Customer
-            </p>
+            <div className="space-y-2 text-center">
+              <p className="text-fog/40 text-xs mt-1">
+                Need: 1 Worker + 1 Camera + at least 1 Customer for full game
+              </p>
+              <button
+                type="button"
+                onClick={() => handleStartShift(true)}
+                className="w-full py-3 bg-amber-glow/20 border border-amber-glow text-amber-glow font-bold uppercase text-xs hover:bg-amber-glow/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                <span>START SOLO / PRACTICE SHIFT (TEST MODE)</span>
+              </button>
+            </div>
           )}
         </div>
       )}

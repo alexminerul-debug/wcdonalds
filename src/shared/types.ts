@@ -125,7 +125,7 @@ export interface VisionAnalysisResult {
 export type ClientMessage =
   | { type: "join-room"; name: string }
   | { type: "claim-role"; role: PlayerRole }
-  | { type: "start-shift" }
+  | { type: "start-shift"; practiceMode?: boolean }
   | { type: "add-to-cart"; menuItemId: string }
   | { type: "remove-from-cart"; menuItemId: string }
   | { type: "clear-cart" }
@@ -136,11 +136,17 @@ export type ClientMessage =
   | { type: "purchase-ability"; abilityId: string }
   | { type: "next-customer" }
   | { type: "camera-snapshot"; dataUrl: string }
+  | { type: "cctv-frame"; frame: string }
+  | { type: "viewer-join"; viewerId: string }
+  | { type: "offer"; viewerId: string; sdp: unknown }
+  | { type: "answer"; viewerId: string; sdp: unknown }
+  | { type: "ice-candidate"; viewerId: string; candidate: unknown }
   | { type: "webrtc-signal"; targetId: string; signal: unknown };
 
 // ---------- Server → Client ----------
 export type ServerMessage =
-  | { type: "room-state"; state: GameRoomState }
+  | { type: "welcome"; connectionId: string }
+  | { type: "room-state"; state: GameRoomState; selfId?: string }
   | { type: "role-assigned"; role: PlayerRole; playerId: string }
   | { type: "error"; message: string }
   | { type: "shift-started"; queue: string[] }
@@ -156,5 +162,10 @@ export type ServerMessage =
   | { type: "cart-updated"; cart: CartItem[] }
   | { type: "ability-purchased"; abilityId: string; balance: number }
   | { type: "webrtc-signal"; senderId: string; signal: unknown }
+  | { type: "viewer-join"; viewerId: string }
+  | { type: "offer"; viewerId: string; sdp: unknown }
+  | { type: "answer"; viewerId: string; sdp: unknown }
+  | { type: "ice-candidate"; viewerId: string; candidate: unknown }
+  | { type: "cctv-frame"; frame: string }
   | { type: "camera-ready" }
   | { type: "cctv-glitch"; effect: "static" | "blackout" | "distortion"; isAnomaly: boolean };

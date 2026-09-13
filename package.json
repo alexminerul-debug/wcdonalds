@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:party": "npx partykit dev",
+    "dev:party": "npx partykit dev --disable-request-cf-fetch",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:party\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

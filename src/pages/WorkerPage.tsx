@@ -14,8 +14,8 @@ import { HorrorButton } from '@/components/ui/HorrorButton';
 import { clsx } from 'clsx';
 
 export default function WorkerPage() {
-  const { roomCode } = useParams<{ roomCode: string }>();
-  const { socket, sendMessage } = useGameSocket(roomCode || '');
+  const { code } = useParams<{ code: string }>();
+  const { socket, sendMessage } = useGameSocket(code || '');
   const { gameState, currentTurn, cctvGlitch, workerState, cartItems } = useGameState(socket);
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -71,7 +71,7 @@ export default function WorkerPage() {
           </div>
         </div>
         <div className="flex items-center gap-4 text-xs md:text-sm">
-          <div className="text-ash">ROOM: <span className="text-bone">{roomCode}</span></div>
+          <div className="text-ash">ROOM: <span className="text-bone">{code}</span></div>
           <div className="text-safe bg-safe/10 px-2 py-1 rounded border border-safe/20 font-bold">
             ${workerState?.balance.toFixed(2) || '0.00'}
           </div>

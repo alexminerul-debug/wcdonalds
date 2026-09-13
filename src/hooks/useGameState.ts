@@ -54,14 +54,30 @@ export function useGameState(socket: PartySocket | null) {
         const msg = JSON.parse(event.data) as ServerMessage;
         
         switch (msg.type) {
+          case 'welcome':
+            if (msg.connectionId) {
+              setMyId(msg.connectionId);
+            }
+            break;
+
           case 'room-state':
             setGameState(msg.state);
             setWorkerState(msg.state.workerState);
             setCurrentTurn(msg.state.currentTurn);
-            const me = msg.state.players.find(p => p.id === socket.id);
+            const myConnId = msg.selfId || myId || socket.id;
+            if (msg.selfId) {
+              setMyId(msg.selfId);
+            }
+            const me = msg.state.players.find(p => p.id === myConnId || p.id === socket.id);
             if (me) {
               setMyRole(me.role);
               setIsHost(me.isHost);
+            }
+            break;
+
+          case 'role-assigned':
+            if (msg.playerId === myId || msg.playerId === socket.id) {
+              setMyRole(msg.role);
             }
             break;
             

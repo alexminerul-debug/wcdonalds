@@ -271,8 +271,9 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- Connection Handlers ----------
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
-    // Send current state to newly connected client
-    sendTo(conn, { type: "room-state", state: this.getPublicState() });
+    // Send welcome with connection ID and current state
+    sendTo(conn, { type: "welcome", connectionId: conn.id });
+    sendTo(conn, { type: "room-state", state: this.getPublicState(), selfId: conn.id });
   }
 
   onClose(conn: Party.Connection) {
@@ -299,7 +300,19 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- Message Router ----------
   onMessage(message: string | ArrayBuffer, sender: Party.Connection) {
-    if (typeof message !== "string") return;
+    if (typeof message !== "string") {
+      // Binary video frame fallback from camera: broadcast to worker
+      if (this.workerId && sender.id === this.cameraId) {
+        const workerConn = this.room.getConnection(this.workerId);
+        if (workerConn) {
+          workerConn.send(message);
+        }
+      } else {
+        // Forward binary frame to all other connections in room
+        this.room.broadcast(message, [sender.id]);
+      }
+      return;
+    }
 
     let msg: ClientMessage;
     try {
@@ -316,7 +329,7 @@ export default class WcDonaldsServer implements Party.Server {
         this.handleClaimRole(sender, msg.role);
         break;
       case "start-shift":
-        this.handleStartShift(sender);
+        this.handleStartShift(sender, msg.practiceMode);
         break;
       case "add-to-cart":
         this.handleAddToCart(sender, msg.menuItemId);
@@ -351,6 +364,39 @@ export default class WcDonaldsServer implements Party.Server {
       case "webrtc-signal":
         this.handleWebRTCSignal(sender, msg.targetId, msg.signal);
         break;
+      case "viewer-join": {
+        // Forward viewer join to camera
+        if (this.cameraId) {
+          const camConn = this.room.getConnection(this.cameraId);
+          if (camConn) {
+            sendTo(camConn, { type: "viewer-join", viewerId: sender.id });
+          }
+        }
+        break;
+      }
+      case "offer":
+      case "answer":
+      case "ice-candidate": {
+        // Forward WebRTC signals between camera and viewers
+        const targetId = msg.viewerId || (sender.id === this.cameraId ? this.workerId : this.cameraId);
+        if (targetId) {
+          const targetConn = this.room.getConnection(targetId);
+          if (targetConn) {
+            targetConn.send(JSON.stringify(msg));
+          }
+        }
+        break;
+      }
+      case "cctv-frame": {
+        // Fallback base64 frames: forward to worker
+        if (this.workerId && sender.id === this.cameraId) {
+          const workerConn = this.room.getConnection(this.workerId);
+          if (workerConn) {
+            sendTo(workerConn, { type: "cctv-frame", frame: msg.frame });
+          }
+        }
+        break;
+      }
     }
   }
 
@@ -423,27 +469,52 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   // ---------- Game Start ----------
-  private handleStartShift(conn: Party.Connection) {
+  private handleStartShift(conn: Party.Connection, practiceMode?: boolean) {
     if (conn.id !== this.hostId) {
       sendTo(conn, { type: "error", message: "Only the host can start the game" });
       return;
     }
+
+    // Auto-assign host role if testing solo or practice mode
+    if (practiceMode || !this.workerId) {
+      if (!this.workerId) {
+        this.workerId = conn.id;
+        const p = this.players.get(conn.id);
+        if (p) p.role = "worker";
+      }
+      if (!this.cameraId) {
+        this.cameraId = conn.id;
+      }
+    }
+
     if (!this.workerId) {
       sendTo(conn, { type: "error", message: "A Worker must be assigned" });
       return;
     }
     if (!this.cameraId) {
-      sendTo(conn, { type: "error", message: "A Camera must be mounted" });
-      return;
+      this.cameraId = conn.id;
     }
 
     // Gather customers
-    const customers = Array.from(this.players.values()).filter(
+    let customers = Array.from(this.players.values()).filter(
       (p) => p.role === "customer"
     );
+
+    // If no human customers, generate practice customers for test shifts
     if (customers.length < 1) {
-      sendTo(conn, { type: "error", message: "At least 1 customer is needed" });
-      return;
+      const npcNames = ["Alex (Normal)", "Jordan (The Anomaly)", "Taylor (Normal)"];
+      npcNames.forEach((name, i) => {
+        const dummyId = `npc-cust-${i + 1}`;
+        const dummyPlayer: PlayerInfo = {
+          id: dummyId,
+          name,
+          role: "customer",
+          isHost: false,
+          joinedAt: Date.now(),
+        };
+        this.players.set(dummyId, dummyPlayer);
+        customers.push(dummyPlayer);
+      });
     }
 
     // Randomize queue
