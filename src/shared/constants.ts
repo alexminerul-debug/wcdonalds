@@ -78,17 +78,22 @@ import { safeStorage } from "../lib/storage";
 export function getPartyKitHost(): string {
   if (typeof window !== "undefined") {
     const saved = safeStorage.getItem("wcd_party_host");
-    if (saved) return saved;
+    if (saved) {
+      return saved.replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
+    }
 
     // Check query param e.g. ?server=xxx
     const params = new URLSearchParams(window.location.search);
     const serverParam = params.get("server");
     if (serverParam) {
-      safeStorage.setItem("wcd_party_host", serverParam);
-      return serverParam;
+      const clean = serverParam.replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
+      safeStorage.setItem("wcd_party_host", clean);
+      return clean;
     }
 
-    if ((window as any).__PARTYKIT_HOST__) return (window as any).__PARTYKIT_HOST__;
+    if ((window as any).__PARTYKIT_HOST__) {
+      return String((window as any).__PARTYKIT_HOST__).replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
+    }
 
     // Local IP on Wi-Fi (e.g. 192.168.x.x)
     if (/^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname)) {
@@ -100,11 +105,17 @@ export function getPartyKitHost(): string {
     }
   }
 
-  return (import.meta as any).env?.VITE_PARTYKIT_HOST || "localhost:1999";
+  const envHost = (import.meta as any).env?.VITE_PARTYKIT_HOST;
+  if (envHost) {
+    return String(envHost).replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
+  }
+
+  return "localhost:1999";
 }
 
 export function setPartyKitHost(host: string): void {
-  safeStorage.setItem("wcd_party_host", host);
+  const clean = host.replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
+  safeStorage.setItem("wcd_party_host", clean);
 }
 
 export const PARTYKIT_HOST: string = getPartyKitHost();
