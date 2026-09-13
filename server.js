@@ -74,6 +74,10 @@ class GameRoom {
     this.secretTraits = new Map();
     this.secretOrders = new Map();
     this.disconnectTimers = new Map();
+    this.currentNight = 1;
+    this.maxNights = 5;
+    this.nightTime = "12:00 AM";
+    this.turnSecrets = [];
   }
 
   getPublicState() {
@@ -90,6 +94,9 @@ class GameRoom {
       workerState: this.workerState,
       roundResults: this.roundResults || [],
       config: { maxPlayers: 10, anomalyProbability: 0.35, minAnomalies: 1, maxAnomalyRatio: 0.5, turnTimeLimit: 0, startingLives: 3, startingBalance: 0 },
+      currentNight: this.currentNight || 1,
+      maxNights: this.maxNights || 5,
+      nightTime: this.nightTime || "12:00 AM",
     };
   }
 
@@ -281,30 +288,15 @@ class GameRoom {
           if (!this.cameraId) this.cameraId = id;
         }
 
-        let customers = Array.from(this.players.values()).filter((p) => p.role === "customer");
-        if (customers.length < 1) {
-          const npcs = ["Alex (Normal)", "Jordan (The Anomaly)", "Taylor (Normal)"];
-          npcs.forEach((name, i) => {
-            const dummyId = `npc-${i + 1}`;
-            const dummyPlayer = { id: dummyId, name, role: "customer", isHost: false, joinedAt: Date.now() };
-            this.players.set(dummyId, dummyPlayer);
-            customers.push(dummyPlayer);
-          });
-        }
-
-        this.customerQueue = customers.map((c) => c.id).sort(() => Math.random() - 0.5);
-        this.customerQueue.forEach((pId, idx) => {
-          const isAnomaly = idx === 1; // Jordan is anomaly
-          this.secretRoles.set(pId, isAnomaly ? "anomaly" : "normal");
-          this.secretOrders.set(pId, generateRandomOrder());
-          if (isAnomaly) this.secretTraits.set(pId, selectAnomalyTraits());
-        });
-
         this.workerState = { cart: [], balance: 0, lives: 3, abilities: [], totalServed: 0, totalCaught: 0 };
-        this.phase = "playing";
-        this.currentTurnIndex = -1;
-        this.broadcast({ type: "shift-started", queue: this.customerQueue });
-        this.advanceTurn();
+        this.startNight(1);
+        break;
+      }
+
+      case "start-next-night": {
+        if (this.phase === "night_complete" && this.currentNight < this.maxNights) {
+          this.startNight(this.currentNight + 1);
+        }
         break;
       }
 
@@ -433,29 +425,173 @@ class GameRoom {
     }
   }
 
+  startNight(nightNumber) {
+    this.currentNight = nightNumber;
+    this.phase = "playing";
+    this.currentTurnIndex = -1;
+    this.nightTime = "12:00 AM";
+
+    // Gather all real human customers in the room (anyone who is not worker and not camera)
+    let humanCustomers = Array.from(this.players.values()).filter(
+      (p) => p.id !== this.workerId && p.id !== this.cameraId
+    );
+
+    // Ensure all non-worker non-camera human players have role customer
+    humanCustomers.forEach((c) => {
+      c.role = "customer";
+    });
+
+    let customerPool = [];
+    if (humanCustomers.length > 0) {
+      // Repeat customers so there are multiple visits per night:
+      // If 1 customer: 3 visits in Night 1-2, 4 visits in Night 3-4, 5 visits in Night 5
+      // If 2 customers: 4 visits total (2 each)
+      // If 3+ customers: each visits at least once, plus repeat visits
+      const targetOrders =
+        this.currentNight <= 2
+          ? Math.max(3, humanCustomers.length)
+          : this.currentNight <= 4
+          ? Math.max(4, humanCustomers.length)
+          : Math.max(5, humanCustomers.length);
+
+      while (customerPool.length < targetOrders) {
+        const shuffled = [...humanCustomers].sort(() => Math.random() - 0.5);
+        for (const c of shuffled) {
+          customerPool.push(c.id);
+          if (customerPool.length >= targetOrders) break;
+        }
+      }
+    } else {
+      // Solo test mode with NPCs
+      const npcs = ["Alex (Normal)", "Jordan (The Anomaly)", "Taylor (Normal)"];
+      npcs.forEach((name, i) => {
+        const dummyId = `npc-${i + 1}`;
+        const dummyPlayer = {
+          id: dummyId,
+          name,
+          role: "customer",
+          isHost: false,
+          joinedAt: Date.now(),
+        };
+        this.players.set(dummyId, dummyPlayer);
+      });
+      customerPool = ["npc-1", "npc-2", "npc-3"];
+    }
+
+    this.customerQueue = customerPool;
+
+    // Determine anomaly count for this night (escalating difficulty!)
+    const numAnomalies =
+      this.currentNight === 1
+        ? 1
+        : this.currentNight <= 2
+        ? 1
+        : this.currentNight <= 4
+        ? Math.min(2, Math.floor(customerPool.length / 2))
+        : Math.min(3, Math.ceil(customerPool.length / 2));
+
+    const anomalyIndices = new Set();
+    while (anomalyIndices.size < numAnomalies) {
+      anomalyIndices.add(Math.floor(Math.random() * customerPool.length));
+    }
+
+    this.turnSecrets = [];
+    for (let i = 0; i < customerPool.length; i++) {
+      const isAnomaly = anomalyIndices.has(i);
+      const secretRole = isAnomaly ? "anomaly" : "normal";
+      const order = generateRandomOrder();
+      const traits = isAnomaly ? selectAnomalyTraits() : null;
+      this.turnSecrets.push({ secretRole, order, traits });
+    }
+
+    this.broadcast({
+      type: "shift-started",
+      queue: this.customerQueue,
+      night: this.currentNight,
+    });
+    this.advanceTurn();
+  }
+
   advanceTurn() {
     this.currentTurnIndex++;
-    if (this.currentTurnIndex >= this.customerQueue.length || this.workerState.lives <= 0) {
+
+    // Check if worker died
+    if (this.workerState.lives <= 0) {
       this.phase = "game_over";
       this.currentTurn = null;
-      this.broadcast({ type: "game-over", workerState: this.workerState, results: this.roundResults });
+      this.broadcast({
+        type: "game-over",
+        workerState: this.workerState,
+        results: this.roundResults,
+        victory: false,
+      });
       this.broadcastState();
       return;
     }
 
+    // Check if shift is finished
+    if (this.currentTurnIndex >= this.customerQueue.length) {
+      this.nightTime = "6:00 AM";
+
+      if (this.currentNight >= this.maxNights) {
+        // VICTORY: Survived all 5 nights!
+        this.phase = "game_over";
+        this.currentTurn = null;
+        this.broadcast({
+          type: "game-over",
+          workerState: this.workerState,
+          results: this.roundResults,
+          victory: true,
+        });
+        this.broadcastState();
+        return;
+      }
+
+      // Night survived! Advance to next night!
+      this.phase = "night_complete";
+      this.currentTurn = null;
+      const completedNight = this.currentNight;
+      const nextNight = this.currentNight + 1;
+      this.broadcast({
+        type: "night-complete",
+        night: completedNight,
+        nextNight,
+      });
+      this.broadcastState();
+
+      // Automatically transition to next night after 4.5 seconds
+      setTimeout(() => {
+        if (this.phase === "night_complete") {
+          this.startNight(nextNight);
+        }
+      }, 4500);
+      return;
+    }
+
+    // Active customer turn
     const playerId = this.customerQueue[this.currentTurnIndex];
     const player = this.players.get(playerId);
-    const secretRole = this.secretRoles.get(playerId) || "normal";
-    const order = this.secretOrders.get(playerId) || generateRandomOrder();
-    const traits = this.secretTraits.get(playerId) || null;
+    const turnSecret = this.turnSecrets[this.currentTurnIndex] || {
+      secretRole: "normal",
+      order: generateRandomOrder(),
+      traits: null,
+    };
+
+    const times = ["12:00 AM", "1:00 AM", "2:00 AM", "3:00 AM", "4:00 AM", "5:00 AM"];
+    this.nightTime = times[Math.min(this.currentTurnIndex, times.length - 1)];
 
     this.currentTurn = {
       playerId,
       playerName: player ? player.name : "Customer",
+      secretRole: turnSecret.secretRole,
+      assignedOrder: turnSecret.order,
+      anomalyTraits: turnSecret.traits,
+      detectedTraits: [],
       queuePosition: this.currentTurnIndex + 1,
       totalCustomers: this.customerQueue.length,
       startedAt: Date.now(),
       phase: "ordering",
+      result: null,
     };
 
     this.broadcast({ type: "turn-start", turn: this.currentTurn });
@@ -463,14 +599,30 @@ class GameRoom {
     // Send secret role to current customer
     const custWs = this.connections.get(playerId);
     if (custWs && custWs.readyState === WebSocket.OPEN) {
-      custWs.send(JSON.stringify({ type: "secret-role", secretRole, order, traits }));
+      custWs.send(
+        JSON.stringify({
+          type: "secret-role",
+          secretRole: turnSecret.secretRole,
+          order: turnSecret.order,
+          traits: turnSecret.traits,
+        })
+      );
     }
 
+    // Update secret role maps for reconnects
+    this.secretRoles.set(playerId, turnSecret.secretRole);
+    this.secretOrders.set(playerId, turnSecret.order);
+    this.secretTraits.set(playerId, turnSecret.traits);
+
     // Trigger CCTV glitch if anomaly
-    if (secretRole === "anomaly") {
+    if (turnSecret.secretRole === "anomaly") {
       setTimeout(() => {
-        this.broadcast({ type: "cctv-glitch", effect: "distortion", isAnomaly: true });
-      }, 4000);
+        this.broadcast({
+          type: "cctv-glitch",
+          effect: "distortion",
+          isAnomaly: true,
+        });
+      }, 3500);
     }
 
     this.broadcastState();

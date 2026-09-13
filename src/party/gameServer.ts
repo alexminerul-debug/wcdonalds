@@ -231,6 +231,10 @@ export default class WcDonaldsServer implements Party.Server {
   private secretTraits: Map<string, AnomalyTrait[]> = new Map();
   private secretOrders: Map<string, MenuItem[]> = new Map();
   private config: GameConfig = { ...DEFAULT_CONFIG };
+  private currentNight = 1;
+  private maxNights = 5;
+  private nightTime = "12:00 AM";
+  private turnSecrets: Array<{ secretRole: SecretRole; order: MenuItem[]; traits: AnomalyTrait[] | null }> = [];
 
   // AI analysis throttle
   private lastAnalysisTime = 0;
@@ -261,6 +265,9 @@ export default class WcDonaldsServer implements Party.Server {
       workerState: this.workerState,
       roundResults: this.roundResults,
       config: this.config,
+      currentNight: this.currentNight || 1,
+      maxNights: this.maxNights || 5,
+      nightTime: this.nightTime || "12:00 AM",
     };
   }
 
@@ -356,6 +363,11 @@ export default class WcDonaldsServer implements Party.Server {
         break;
       case "start-shift":
         this.handleStartShift(sender, msg.practiceMode);
+        break;
+      case "start-next-night":
+        if (this.phase === "night_complete" && this.currentNight < this.maxNights) {
+          this.startNight(this.currentNight + 1);
+        }
         break;
       case "add-to-cart":
         this.handleAddToCart(sender, msg.menuItemId);
@@ -553,13 +565,57 @@ export default class WcDonaldsServer implements Party.Server {
       this.cameraId = conn.id;
     }
 
-    // Gather customers
-    let customers = Array.from(this.players.values()).filter(
-      (p) => p.role === "customer"
+    this.workerState = {
+      cart: [],
+      balance: this.config.startingBalance,
+      lives: this.config.startingLives,
+      abilities: [],
+      totalServed: 0,
+      totalCaught: 0,
+    };
+    this.roundResults = [];
+    this.startNight(1);
+  }
+
+  private startNight(nightNumber: number) {
+    this.currentNight = nightNumber;
+    this.phase = "playing";
+    this.currentTurnIndex = -1;
+    this.currentTurn = null;
+    this.nightTime = "12:00 AM";
+
+    // Gather real human customers (anyone not worker and not camera)
+    let humanCustomers = Array.from(this.players.values()).filter(
+      (p) => p.id !== this.workerId && p.id !== this.cameraId
     );
 
-    // If no human customers, generate practice customers for test shifts
-    if (customers.length < 1) {
+    // Mark them as customers
+    humanCustomers.forEach((c) => {
+      c.role = "customer";
+    });
+
+    let customerPool: string[] = [];
+    if (humanCustomers.length > 0) {
+      // Repeat customers so there are multiple visits per night:
+      // If 1 customer: 3 visits in Night 1-2, 4 visits in Night 3-4, 5 visits in Night 5
+      // If 2 customers: 4 visits total (2 each)
+      // If 3+ customers: each visits at least once, plus repeat visits
+      const targetOrders =
+        this.currentNight <= 2
+          ? Math.max(3, humanCustomers.length)
+          : this.currentNight <= 4
+          ? Math.max(4, humanCustomers.length)
+          : Math.max(5, humanCustomers.length);
+
+      while (customerPool.length < targetOrders) {
+        const shuffled = [...humanCustomers].sort(() => Math.random() - 0.5);
+        for (const c of shuffled) {
+          customerPool.push(c.id);
+          if (customerPool.length >= targetOrders) break;
+        }
+      }
+    } else {
+      // Solo test mode with NPCs
       const npcNames = ["Alex (Normal)", "Jordan (The Anomaly)", "Taylor (Normal)"];
       npcNames.forEach((name, i) => {
         const dummyId = `npc-cust-${i + 1}`;
@@ -571,74 +627,45 @@ export default class WcDonaldsServer implements Party.Server {
           joinedAt: Date.now(),
         };
         this.players.set(dummyId, dummyPlayer);
-        customers.push(dummyPlayer);
       });
+      customerPool = ["npc-cust-1", "npc-cust-2", "npc-cust-3"];
     }
 
-    // Randomize queue
-    this.customerQueue = customers
-      .map((c) => c.id)
-      .sort(() => Math.random() - 0.5);
+    this.customerQueue = customerPool;
 
-    // Assign secret roles
-    const totalCustomers = this.customerQueue.length;
-    const minAnomalies = Math.min(this.config.minAnomalies, totalCustomers);
-    const maxAnomalies = Math.max(
-      minAnomalies,
-      Math.floor(totalCustomers * this.config.maxAnomalyRatio)
-    );
+    // Determine anomaly distribution for this night (escalating difficulty!)
+    const numAnomalies =
+      this.currentNight === 1
+        ? 1
+        : this.currentNight <= 2
+        ? 1
+        : this.currentNight <= 4
+        ? Math.min(2, Math.floor(customerPool.length / 2))
+        : Math.min(3, Math.ceil(customerPool.length / 2));
 
-    // Decide which customers are anomalies
-    let anomalyCount = 0;
     const anomalyIndices = new Set<number>();
-
-    // Guarantee minimum anomalies
-    while (anomalyIndices.size < minAnomalies) {
-      anomalyIndices.add(Math.floor(Math.random() * totalCustomers));
+    while (anomalyIndices.size < numAnomalies) {
+      anomalyIndices.add(Math.floor(Math.random() * customerPool.length));
     }
 
-    // Probabilistic additional anomalies
-    for (let i = 0; i < totalCustomers; i++) {
-      if (anomalyIndices.has(i)) continue;
-      if (anomalyIndices.size >= maxAnomalies) break;
-      if (Math.random() < this.config.anomalyProbability) {
-        anomalyIndices.add(i);
-      }
+    this.turnSecrets = [];
+    for (let i = 0; i < customerPool.length; i++) {
+      const isAnomaly = anomalyIndices.has(i);
+      const secretRole: SecretRole = isAnomaly ? "anomaly" : "normal";
+      const order = generateRandomOrder();
+      const traits = isAnomaly ? selectAnomalyTraits() : null;
+      this.turnSecrets.push({ secretRole, order, traits });
     }
 
-    // Assign roles and orders
-    this.customerQueue.forEach((playerId, index) => {
-      const isAnomaly = anomalyIndices.has(index);
-      this.secretRoles.set(playerId, isAnomaly ? "anomaly" : "normal");
-      this.secretOrders.set(playerId, generateRandomOrder());
-      if (isAnomaly) {
-        this.secretTraits.set(playerId, selectAnomalyTraits());
-      }
-    });
-
-    // Reset worker state
-    this.workerState = {
-      cart: [],
-      balance: this.config.startingBalance,
-      lives: this.config.startingLives,
-      abilities: [],
-      totalServed: 0,
-      totalCaught: 0,
-    };
-    this.roundResults = [];
-    this.currentTurnIndex = -1;
-    this.currentTurn = null;
-
-    this.phase = "playing";
     this.room.broadcast(
       JSON.stringify({
         type: "shift-started",
         queue: this.customerQueue,
+        night: this.currentNight,
       } as ServerMessage)
     );
     this.broadcastState();
 
-    // Start first customer turn
     this.advanceTurn();
   }
 
@@ -646,36 +673,76 @@ export default class WcDonaldsServer implements Party.Server {
   private advanceTurn() {
     this.currentTurnIndex++;
 
-    if (this.currentTurnIndex >= this.customerQueue.length || this.workerState.lives <= 0) {
-      this.endGame();
+    if (this.workerState.lives <= 0) {
+      this.endGame(false);
+      return;
+    }
+
+    // Check if shift is finished
+    if (this.currentTurnIndex >= this.customerQueue.length) {
+      this.nightTime = "6:00 AM";
+
+      if (this.currentNight >= this.maxNights) {
+        // VICTORY: Survived all 5 nights!
+        this.endGame(true);
+        return;
+      }
+
+      // Night complete!
+      this.phase = "night_complete";
+      this.currentTurn = null;
+      const completedNight = this.currentNight;
+      const nextNight = this.currentNight + 1;
+      this.room.broadcast(
+        JSON.stringify({
+          type: "night-complete",
+          night: completedNight,
+          nextNight,
+        } as ServerMessage)
+      );
+      this.broadcastState();
+
+      // Automatically transition to next night after 4.5 seconds
+      setTimeout(() => {
+        if (this.phase === "night_complete") {
+          this.startNight(nextNight);
+        }
+      }, 4500);
       return;
     }
 
     const playerId = this.customerQueue[this.currentTurnIndex];
     const player = this.players.get(playerId);
-    const secretRole = this.secretRoles.get(playerId) || "normal";
-    const order = this.secretOrders.get(playerId) || [];
-    const traits = this.secretTraits.get(playerId) || null;
+    const turnSecret = this.turnSecrets[this.currentTurnIndex] || {
+      secretRole: "normal" as SecretRole,
+      order: generateRandomOrder(),
+      traits: null,
+    };
+
+    const times = ["12:00 AM", "1:00 AM", "2:00 AM", "3:00 AM", "4:00 AM", "5:00 AM"];
+    this.nightTime = times[Math.min(this.currentTurnIndex, times.length - 1)];
 
     this.currentTurn = {
       playerId,
-      playerName: player?.name || "Unknown",
-      secretRole,
-      assignedOrder: order,
-      anomalyTraits: traits,
+      playerName: player?.name || "Customer",
+      secretRole: turnSecret.secretRole,
+      assignedOrder: turnSecret.order,
+      anomalyTraits: turnSecret.traits,
       detectedTraits: [],
-      phase: "approaching",
+      queuePosition: this.currentTurnIndex + 1,
+      totalCustomers: this.customerQueue.length,
+      startedAt: Date.now(),
+      phase: "ordering",
       result: null,
     };
 
-    // Clear worker cart
     this.workerState.cart = [];
 
     // Broadcast turn start (without secret info)
     const publicTurn: TurnState = {
       ...this.currentTurn,
-      secretRole: "normal", // masked
-      anomalyTraits: null,  // masked
+      secretRole: "normal",
+      anomalyTraits: null,
     };
     this.room.broadcast(
       JSON.stringify({ type: "turn-start", turn: publicTurn } as ServerMessage)
@@ -686,19 +753,24 @@ export default class WcDonaldsServer implements Party.Server {
     if (customerConn) {
       sendTo(customerConn, {
         type: "secret-role",
-        secretRole,
-        order,
-        traits: traits || null,
+        secretRole: turnSecret.secretRole,
+        order: turnSecret.order,
+        traits: turnSecret.traits,
       });
     }
 
-    // If anomaly, send CCTV glitch effects to worker
-    if (secretRole === "anomaly" && this.workerId) {
+    this.secretRoles.set(playerId, turnSecret.secretRole);
+    this.secretOrders.set(playerId, turnSecret.order);
+    if (turnSecret.traits) {
+      this.secretTraits.set(playerId, turnSecret.traits);
+    } else {
+      this.secretTraits.delete(playerId);
+    }
+
+    if (turnSecret.secretRole === "anomaly" && this.workerId) {
       this.scheduleCCTVGlitches();
     }
 
-    // Update turn phase
-    this.currentTurn.phase = "ordering";
     this.broadcastState();
   }
 
@@ -991,8 +1063,15 @@ export default class WcDonaldsServer implements Party.Server {
         return;
       }
 
-      const undetectedTraits = this.currentTurn.anomalyTraits.filter(
-        (t) => !this.currentTurn!.detectedTraits.includes(t.id)
+      const turn = this.currentTurn;
+      if (!turn || !turn.anomalyTraits) {
+        this.analysisInProgress = false;
+        return;
+      }
+
+      turn.detectedTraits = turn.detectedTraits || [];
+      const undetectedTraits = turn.anomalyTraits.filter(
+        (t) => !turn.detectedTraits!.includes(t.id)
       );
       if (undetectedTraits.length === 0) {
         this.analysisInProgress = false;
@@ -1001,18 +1080,20 @@ export default class WcDonaldsServer implements Party.Server {
 
       const result = await analyzeSnapshot(dataUrl, undetectedTraits, apiKey);
 
-      if (result && result.detectedTraits.length > 0) {
+      if (result && result.detectedTraits.length > 0 && this.currentTurn) {
+        const activeTurn = this.currentTurn;
+        activeTurn.detectedTraits = activeTurn.detectedTraits || [];
         // Add newly detected traits
         for (const traitId of result.detectedTraits) {
-          if (!this.currentTurn!.detectedTraits.includes(traitId)) {
-            this.currentTurn!.detectedTraits.push(traitId);
+          if (!activeTurn.detectedTraits.includes(traitId)) {
+            activeTurn.detectedTraits.push(traitId);
 
             // Broadcast trait detection to all
             this.room.broadcast(
               JSON.stringify({
                 type: "trait-detected",
                 traitId,
-                allDetected: this.currentTurn!.detectedTraits,
+                allDetected: activeTurn.detectedTraits,
               } as ServerMessage)
             );
           }
@@ -1042,13 +1123,15 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   // ---------- Game Over ----------
-  private endGame() {
+  private endGame(victory: boolean = false) {
     this.phase = "game_over";
+    this.currentTurn = null;
     this.room.broadcast(
       JSON.stringify({
         type: "game-over",
         workerState: this.workerState,
         results: this.roundResults,
+        victory,
       } as ServerMessage)
     );
     this.broadcastState();

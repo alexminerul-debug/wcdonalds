@@ -3,7 +3,7 @@
 // ============================================
 
 // ---------- Game Phases ----------
-export type GamePhase = "lobby" | "setup" | "playing" | "round_result" | "game_over";
+export type GamePhase = "lobby" | "setup" | "playing" | "round_result" | "night_complete" | "game_over";
 
 // ---------- Player Roles ----------
 export type PlayerRole = "worker" | "camera" | "customer" | "unassigned";
@@ -43,12 +43,15 @@ export interface AnomalyTrait {
 export interface TurnState {
   playerId: string;
   playerName: string;
-  secretRole: SecretRole;
-  assignedOrder: MenuItem[];
-  anomalyTraits: AnomalyTrait[] | null;   // null if normal customer
-  detectedTraits: string[];               // trait IDs validated by AI
+  secretRole?: SecretRole;
+  assignedOrder?: MenuItem[];
+  anomalyTraits?: AnomalyTrait[] | null;   // null if normal customer
+  detectedTraits?: string[];               // trait IDs validated by AI
   phase: "approaching" | "ordering" | "payment" | "deciding" | "resolved";
   result: TurnResult | null;
+  queuePosition?: number;
+  totalCustomers?: number;
+  startedAt?: number;
 }
 
 export type TurnResult =
@@ -91,6 +94,9 @@ export interface GameRoomState {
   workerState: WorkerState;
   roundResults: TurnResult[];
   config: GameConfig;
+  currentNight: number;       // 1 to 5
+  maxNights: number;          // 5
+  nightTime: string;          // "12:00 AM" to "6:00 AM"
 }
 
 export interface GameConfig {
@@ -135,6 +141,7 @@ export type ClientMessage =
   | { type: "report-anomaly" }
   | { type: "purchase-ability"; abilityId: string }
   | { type: "next-customer" }
+  | { type: "start-next-night" }
   | { type: "camera-snapshot"; dataUrl: string }
   | { type: "cctv-frame"; frame: string }
   | { type: "viewer-join"; viewerId: string }
@@ -150,7 +157,7 @@ export type ServerMessage =
   | { type: "room-state"; state: GameRoomState; selfId?: string }
   | { type: "role-assigned"; role: PlayerRole; playerId: string }
   | { type: "error"; message: string }
-  | { type: "shift-started"; queue: string[] }
+  | { type: "shift-started"; queue: string[]; night?: number }
   | { type: "turn-start"; turn: TurnState }
   | { type: "secret-role"; secretRole: SecretRole; order: MenuItem[]; traits: AnomalyTrait[] | null }
   | { type: "payment-request"; total: number; items: CartItem[] }
@@ -159,7 +166,8 @@ export type ServerMessage =
   | { type: "serve-result"; result: TurnResult }
   | { type: "report-result"; result: TurnResult }
   | { type: "round-summary"; result: TurnResult; workerState: WorkerState }
-  | { type: "game-over"; workerState: WorkerState; results: TurnResult[] }
+  | { type: "night-complete"; night: number; nextNight: number }
+  | { type: "game-over"; workerState: WorkerState; results: TurnResult[]; victory?: boolean }
   | { type: "cart-updated"; cart: CartItem[] }
   | { type: "ability-purchased"; abilityId: string; balance: number }
   | { type: "webrtc-signal"; senderId: string; signal: unknown }

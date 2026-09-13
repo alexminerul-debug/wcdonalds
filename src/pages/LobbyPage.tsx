@@ -39,10 +39,10 @@ export default function LobbyPage() {
 
   // Navigate to role-specific page when game starts
   useEffect(() => {
-    if (gameState?.phase === "playing" || gameState?.phase === "game_over") {
+    if (gameState?.phase === "playing" || gameState?.phase === "night_complete" || gameState?.phase === "game_over") {
       if (myRole === "worker") navigate(`/room/${code}/worker`);
       else if (myRole === "camera") navigate(`/room/${code}/camera`);
-      else if (myRole === "customer") navigate(`/room/${code}/customer`);
+      else navigate(`/room/${code}/customer`);
     }
   }, [gameState?.phase, myRole, code, navigate]);
 
@@ -53,6 +53,12 @@ export default function LobbyPage() {
       sessionStorage.setItem("wcd_player_name", trimmed);
     }
     sendMessage({ type: "join-room", name: trimmed });
+    // Default to customer role if joining
+    const defaultRole: PlayerRole = isHost ? "worker" : "customer";
+    sendMessage({ type: "claim-role", role: defaultRole });
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("wcd_player_role", defaultRole);
+    }
     setHasJoined(true);
   };
 

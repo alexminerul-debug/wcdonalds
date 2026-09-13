@@ -14,6 +14,8 @@ import { SlideToPayModal } from "@/components/customer/SlideToPayModal";
 import { DetectedScreen } from "@/components/customer/DetectedScreen";
 import { VictoryScreen } from "@/components/customer/VictoryScreen";
 import { GlitchText } from "@/components/ui/GlitchText";
+import { Moon, Clock, Skull } from "lucide-react";
+import { clsx } from "clsx";
 
 export default function CustomerPage() {
   const { code } = useParams<{ code: string }>();
@@ -49,10 +51,17 @@ export default function CustomerPage() {
     }
   }, [connectionStatus, sendMessage]);
 
+  // Robust Turn Matching: if there is only 1 customer in the room, they are always active when an order is up
+  const humanCustomers = (gameState?.players || []).filter((p) => p.role === "customer");
+  const isOnlyCustomer = humanCustomers.length <= 1;
+  const isCurrentTurnPlayer = currentTurn && myId && currentTurn.playerId === myId;
+  const isOnlyCustomerTurn = isOnlyCustomer && currentTurn && !currentTurn.playerId.startsWith("npc");
+  const isMyActiveTurn = isMyTurn || isCurrentTurnPlayer || isOnlyCustomerTurn;
+
   // When a new turn starts for this player, show role card
   useEffect(() => {
     if (
-      isMyTurn &&
+      isMyActiveTurn &&
       gameState &&
       gameState.currentTurnIndex !== prevTurnIndex
     ) {
@@ -64,7 +73,7 @@ export default function CustomerPage() {
         SoundEngine.getInstance().playChime();
       } catch {}
     }
-  }, [isMyTurn, gameState?.currentTurnIndex, prevTurnIndex]);
+  }, [isMyActiveTurn, gameState?.currentTurnIndex, prevTurnIndex]);
 
   // Vibrate on payment request
   useEffect(() => {
@@ -100,14 +109,57 @@ export default function CustomerPage() {
       ? secretOrder
       : [MENU_ITEMS[0], MENU_ITEMS[1]];
 
+  // ---- NIGHT COMPLETE (6:00 AM) ----
+  if (gameState.phase === "night_complete") {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-abyss p-6 text-center select-none font-mono animate-fade-in">
+        <div className="w-16 h-16 rounded-full bg-safe/20 border-2 border-safe flex items-center justify-center mb-6 animate-pulse">
+          <Clock className="w-8 h-8 text-safe" />
+        </div>
+        <div className="text-safe text-sm tracking-widest uppercase mb-2">6:00 AM</div>
+        <h1 className="text-3xl md:text-5xl font-bold text-bone mb-4 glitch-text" data-text={`NIGHT ${gameState.currentNight || 1} SURVIVED`}>
+          NIGHT {gameState.currentNight || 1} SURVIVED
+        </h1>
+        <p className="font-mono text-fog max-w-xs text-sm">
+          Shift completed! The sun rises over WcDonald's...
+        </p>
+        <div className="mt-8 text-amber-glow text-xs uppercase tracking-widest animate-pulse">
+          Preparing for Night {(gameState.currentNight || 1) + 1} of 5...
+        </div>
+      </div>
+    );
+  }
+
   // ---- GAME OVER ----
   if (gameState.phase === "game_over") {
+    const isVictory = gameState.workerState.lives > 0;
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-abyss p-6 text-center">
-        <h1 className="text-3xl font-mono text-blood-bright mb-4">
-          <GlitchText text="SHIFT ENDED" />
-        </h1>
-        <p className="font-mono text-fog">The night is over.</p>
+      <div className="flex flex-col items-center justify-center h-screen bg-abyss p-6 text-center select-none font-mono">
+        {isVictory ? (
+          <>
+            <div className="w-20 h-20 rounded-full border-4 border-safe flex items-center justify-center mb-6 bg-safe/20 animate-pulse">
+              <Moon className="w-10 h-10 text-safe" />
+            </div>
+            <h1 className="text-3xl md:text-5xl font-bold text-safe mb-4 glitch-text" data-text="ALL 5 NIGHTS SURVIVED">
+              ALL 5 NIGHTS SURVIVED!
+            </h1>
+            <p className="font-mono text-bone text-sm max-w-xs mb-4">
+              Congratulations! You survived the entire week at WcDonald's!
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="w-20 h-20 rounded-full border-4 border-blood flex items-center justify-center mb-6 bg-blood/20 animate-pulse">
+              <Skull className="w-10 h-10 text-blood" />
+            </div>
+            <h1 className="text-3xl md:text-4xl font-mono text-blood-bright mb-4 glitch-text" data-text="SHIFT TERMINATED">
+              SHIFT TERMINATED
+            </h1>
+            <p className="font-mono text-fog text-sm max-w-xs">
+              The worker lost all lives to anomalies. The night is over.
+            </p>
+          </>
+        )}
       </div>
     );
   }
@@ -115,7 +167,7 @@ export default function CustomerPage() {
   // ---- RESULT SCREENS (current turn resolved and it was this player) ----
   if (
     lastResult &&
-    currentTurn?.playerId === myId &&
+    (currentTurn?.playerId === myId || isOnlyCustomer) &&
     currentTurn?.phase === "resolved" &&
     !resultDismissed
   ) {
@@ -155,12 +207,19 @@ export default function CustomerPage() {
   }
 
   // ---- ACTIVE TURN ----
-  if (isMyTurn) {
+  if (isMyActiveTurn) {
     return (
       <div className="min-h-screen bg-abyss text-bone relative">
+        {/* Top Night & Time Indicator */}
+        <div className="absolute top-2 left-2 flex items-center gap-2 z-10 font-mono text-xs text-amber-glow bg-void/80 px-2 py-1 border border-smoke/30">
+          <span>NIGHT {gameState?.currentNight || 1}/5</span>
+          <span className="text-smoke">|</span>
+          <span className="text-bone">{gameState?.nightTime || "12:00 AM"}</span>
+        </div>
+
         {/* Connection dot */}
         <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
-          <div className="w-2 h-2 rounded-full bg-safe" />
+          <div className="w-2 h-2 rounded-full bg-safe animate-pulse" />
           <span className="text-[10px] font-mono text-fog uppercase">
             live
           </span>

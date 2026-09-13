@@ -9,7 +9,7 @@ import { AnomalyCodex } from '@/components/worker/AnomalyCodex';
 import { AbilityShop } from '@/components/worker/AbilityShop';
 import { DecisionPanel } from '@/components/worker/DecisionPanel';
 import { JumpscareOverlay } from '@/components/worker/JumpscareOverlay';
-import { Heart, Moon } from 'lucide-react';
+import { Heart, Moon, Skull } from 'lucide-react';
 import { HorrorButton } from '@/components/ui/HorrorButton';
 import { clsx } from 'clsx';
 
@@ -88,8 +88,13 @@ export default function WorkerPage() {
 
       {/* Top HUD */}
       <header className="bg-abyss border-b border-smoke/30 p-2 md:p-4 flex justify-between items-center z-10 shrink-0 shadow-md">
-        <div className="flex items-center gap-4">
-          <div className="text-amber-glow font-bold tracking-widest text-sm md:text-base">WCD_WORKER_OS</div>
+        <div className="flex items-center gap-3 md:gap-5">
+          <div className="text-amber-glow font-bold tracking-widest text-xs md:text-sm flex items-center gap-2">
+            <Moon className="w-4 h-4 text-amber-glow animate-pulse" />
+            <span>NIGHT {gameState?.currentNight || 1}/5</span>
+            <span className="text-smoke">|</span>
+            <span className="text-bone">{gameState?.nightTime || "12:00 AM"}</span>
+          </div>
           <div className="flex gap-1">
             {Array.from({ length: 3 }).map((_, i) => (
               <Heart 
@@ -197,6 +202,82 @@ export default function WorkerPage() {
           customerName={currentTurn?.playerName || null}
         />
       </div>
+
+      {/* 6:00 AM Night Survived Celebration Overlay */}
+      {gameState?.phase === "night_complete" && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6 text-center select-none font-mono">
+          <div className="w-20 h-20 rounded-full border-4 border-safe/60 flex items-center justify-center mb-6 bg-safe/10 animate-bounce">
+            <Moon className="w-10 h-10 text-safe" />
+          </div>
+          <div className="text-safe font-mono text-xl tracking-widest uppercase mb-2">6:00 AM</div>
+          <h1 className="text-4xl md:text-6xl font-bold font-mono text-bone mb-4 glitch-text" data-text={`NIGHT ${gameState.currentNight || 1} SURVIVED`}>
+            NIGHT {gameState.currentNight || 1} SURVIVED
+          </h1>
+          <p className="font-mono text-fog text-sm md:text-base max-w-md mb-8">
+            The shift has ended! Earnings and purchased upgrades are safely preserved for the next night.
+          </p>
+          <div className="bg-void border border-smoke/40 p-4 rounded max-w-xs w-full mb-8 font-mono text-left space-y-2">
+            <div className="flex justify-between text-xs text-ash">
+              <span>Current Night:</span>
+              <span className="text-bone">{gameState.currentNight || 1} of 5</span>
+            </div>
+            <div className="flex justify-between text-xs text-ash">
+              <span>Register Balance:</span>
+              <span className="text-amber-glow">${workerState?.balance.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-ash">
+              <span>Lives Remaining:</span>
+              <span className="text-blood">{workerState?.lives} / 3</span>
+            </div>
+          </div>
+          <button
+            onClick={() => sendMessage({ type: "start-next-night" })}
+            className="px-8 py-4 bg-safe text-abyss font-bold uppercase tracking-widest hover:bg-safe/80 transition-all font-mono shadow-lg"
+          >
+            Start Night {(gameState.currentNight || 1) + 1} of 5 &rarr;
+          </button>
+        </div>
+      )}
+
+      {/* Game Over / Victory Overlay */}
+      {gameState?.phase === "game_over" && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6 text-center select-none font-mono">
+          {workerState?.lives > 0 ? (
+            <>
+              <div className="w-24 h-24 rounded-full border-4 border-safe flex items-center justify-center mb-6 bg-safe/20 animate-pulse">
+                <Moon className="w-12 h-12 text-safe" />
+              </div>
+              <h1 className="text-4xl md:text-6xl font-bold text-safe mb-4 glitch-text" data-text="5 NIGHTS SURVIVED">
+                5 NIGHTS SURVIVED!
+              </h1>
+              <p className="text-bone text-base max-w-md mb-4">
+                You survived the entire work week at WcDonald's! You are officially Employee of the Month.
+              </p>
+              <div className="text-amber-glow text-lg font-bold mb-8">
+                Final Paycheck: ${workerState.balance.toFixed(2)}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-24 h-24 rounded-full border-4 border-blood flex items-center justify-center mb-6 bg-blood/20 animate-pulse">
+                <Skull className="w-12 h-12 text-blood" />
+              </div>
+              <h1 className="text-4xl md:text-6xl font-bold text-blood-bright mb-4 glitch-text" data-text="SHIFT TERMINATED">
+                SHIFT TERMINATED
+              </h1>
+              <p className="text-fog text-base max-w-md mb-8">
+                You ran out of lives. An anomaly breached the counter.
+              </p>
+            </>
+          )}
+          <button
+            onClick={() => window.location.reload()}
+            className="px-8 py-3 border border-smoke/40 text-bone hover:bg-white/10 transition-all uppercase tracking-widest text-sm"
+          >
+            Play Again
+          </button>
+        </div>
+      )}
     </div>
   );
 }
