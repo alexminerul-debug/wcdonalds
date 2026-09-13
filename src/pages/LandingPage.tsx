@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { generateRoomCode } from "@/shared/constants";
-import { Skull, LogIn, Plus } from "lucide-react";
+import { Skull, LogIn, Plus, Server } from "lucide-react";
+import { ServerSettingsModal } from "@/components/ui/ServerSettingsModal";
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
+  const [serverModalOpen, setServerModalOpen] = useState(false);
 
   const handleCreate = () => {
     const code = generateRoomCode();
@@ -99,10 +101,27 @@ export default function LandingPage() {
         </div>
       </div>
 
+      {/* Top Server Settings Button */}
+      <button
+        type="button"
+        onClick={() => setServerModalOpen(true)}
+        className="fixed top-4 right-4 z-50 flex items-center gap-2 text-xs font-mono text-fog/70 hover:text-amber-glow border border-fog/20 hover:border-amber-glow/50 px-3 py-1.5 bg-void/80 transition-all cursor-pointer"
+        title="Server Settings"
+      >
+        <Server className="w-3.5 h-3.5 text-amber-glow" />
+        <span className="hidden sm:inline">Server</span>
+      </button>
+
       {/* Footer */}
       <div className="absolute bottom-6 text-fog/30 text-xs tracking-widest uppercase select-none pointer-events-none">
         A Real-Life Party Game
       </div>
+
+      {/* Server Settings Modal */}
+      <ServerSettingsModal
+        isOpen={serverModalOpen}
+        onClose={() => setServerModalOpen(false)}
+      />
     </div>
   );
 }

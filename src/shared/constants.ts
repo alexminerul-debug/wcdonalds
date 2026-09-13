@@ -73,12 +73,41 @@ export function generateRoomCode(): string {
 // ============================================
 // PartyKit Connection Config
 // ============================================
-export const PARTYKIT_HOST: string =
-  (import.meta as any).env?.VITE_PARTYKIT_HOST ||
-  (typeof window !== "undefined" && (window as any).__PARTYKIT_HOST__) ||
-  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
-    ? "wcdonalds-anomaly.username.partykit.dev"
-    : "localhost:1999");
+export function getPartyKitHost(): string {
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("wcd_party_host");
+    if (saved) return saved;
+
+    // Check query param e.g. ?server=xxx
+    const params = new URLSearchParams(window.location.search);
+    const serverParam = params.get("server");
+    if (serverParam) {
+      localStorage.setItem("wcd_party_host", serverParam);
+      return serverParam;
+    }
+
+    if ((window as any).__PARTYKIT_HOST__) return (window as any).__PARTYKIT_HOST__;
+
+    // Local IP on Wi-Fi (e.g. 192.168.x.x)
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname)) {
+      return `${window.location.hostname}:1999`;
+    }
+
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "localhost:1999";
+    }
+  }
+
+  return (import.meta as any).env?.VITE_PARTYKIT_HOST || "localhost:1999";
+}
+
+export function setPartyKitHost(host: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("wcd_party_host", host);
+  }
+}
+
+export const PARTYKIT_HOST: string = getPartyKitHost();
 
 // ============================================
 // Random Order Generator

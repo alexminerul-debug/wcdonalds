@@ -15,7 +15,9 @@ import {
   Skull,
   Shield,
   User,
+  Server,
 } from "lucide-react";
+import { ServerSettingsModal } from "@/components/ui/ServerSettingsModal";
 
 export default function LobbyPage() {
   const { code } = useParams<{ code: string }>();
@@ -23,6 +25,7 @@ export default function LobbyPage() {
   const [playerName, setPlayerName] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [serverModalOpen, setServerModalOpen] = useState(false);
 
   const { socket, sendMessage, connectionStatus } = useGameSocket(code || "");
   const {
@@ -110,15 +113,21 @@ export default function LobbyPage() {
 
   return (
     <div className="min-h-screen bg-abyss p-4 md:p-8">
-      {/* Connection Status */}
-      <div className="fixed top-3 right-3 z-50 flex items-center gap-2 text-xs">
+      {/* Connection Status Button */}
+      <button
+        type="button"
+        onClick={() => setServerModalOpen(true)}
+        className="fixed top-3 right-3 z-50 flex items-center gap-2 text-xs bg-void/80 border border-fog/20 px-2 py-1 hover:border-amber-glow transition-all cursor-pointer"
+        title="Click to configure server connection"
+      >
         {connectionStatus === "connected" ? (
           <Wifi className="w-3 h-3 text-safe" />
         ) : (
           <WifiOff className="w-3 h-3 text-blood-bright" />
         )}
-        <span className="text-fog">{connectionStatus}</span>
-      </div>
+        <span className="text-fog uppercase">{connectionStatus}</span>
+        <Server className="w-3 h-3 text-fog/50 ml-1" />
+      </button>
 
       {/* Header */}
       <div className="text-center mb-8">
@@ -292,6 +301,12 @@ export default function LobbyPage() {
           Waiting for shift to begin...
         </p>
       </div>
+
+      {/* Server Settings Modal */}
+      <ServerSettingsModal
+        isOpen={serverModalOpen}
+        onClose={() => setServerModalOpen(false)}
+      />
     </div>
   );
 }
