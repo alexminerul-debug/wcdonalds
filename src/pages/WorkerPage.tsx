@@ -19,12 +19,13 @@ import { safeStorage } from '@/lib/storage';
 import { SoundEngine } from '@/lib/audio/soundEngine';
 import { WorkerHackTerminalModal } from '@/components/common/WorkerHackTerminalModal';
 import { WorkerPuzzleModal } from '@/components/worker/WorkerPuzzleModal';
+import { ABILITY_ITEMS } from '@/shared/constants';
 
 export default function WorkerPage() {
   const { code } = useParams<{ code: string }>();
   const { t } = useTranslation();
   const { socket, sendMessage } = useGameSocket(code || '');
-  const { gameState, currentTurn, cctvGlitch, workerState, cartItems, hackAlert } = useGameState(socket);
+  const { gameState, currentTurn, cctvGlitch, workerState, cartItems, hackAlert, purchaseAbilityOptimistic } = useGameState(socket);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -152,9 +153,23 @@ export default function WorkerPage() {
   };
 
   const handlePurchaseAbility = (abilityId: string) => {
+    const item = ABILITY_ITEMS.find((a) => a.id === abilityId);
+    const price = item?.price || 50;
+
     try {
       SoundEngine.getInstance().playCashRegister();
     } catch {}
+
+    // Optimistically deduct money & grant ability in UI immediately
+    purchaseAbilityOptimistic(abilityId, price);
+
+    if (abilityId === 'hack-customer') {
+      try {
+        SoundEngine.getInstance().playJumpscare();
+      } catch {}
+      setShowHackModal(true);
+    }
+
     sendMessage({ type: 'purchase-ability', abilityId });
   };
 

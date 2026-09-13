@@ -1,6 +1,13 @@
 import http from "http";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import { randomUUID } from "crypto";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DIST_DIR = path.join(__dirname, "dist");
 
 const PORT = process.env.PORT || 1999;
 
@@ -549,6 +556,13 @@ class GameRoom {
         const price = prices[abilityId];
         if (price === undefined) break;
 
+        // Auto-replenish if worker balance was 0 or uninitialized in an existing room
+        if (this.workerState.balance < price) {
+          if (this.workerState.balance <= 0 || this.workerState.totalServed === 0) {
+            this.workerState.balance = Math.max(250, price);
+          }
+        }
+
         if (this.workerState.balance < price) {
           const ws = this.connections.get(id);
           if (ws && ws.readyState === WebSocket.OPEN) {
@@ -565,15 +579,13 @@ class GameRoom {
             }
             break;
           }
-          this.workerState.balance -= price;
-          this.workerState.lives = (this.workerState.lives || 3) + 1;
+          this.workerState.balance = Math.max(0, this.workerState.balance - price);
+          this.workerState.lives = Math.min(5, (this.workerState.lives || 3) + 1);
         } else if (abilityId === "hack-customer") {
-          // Can be purchased repeatedly per turn or when needed!
-          this.workerState.balance -= price;
+          this.workerState.balance = Math.max(0, this.workerState.balance - price);
           if (!this.workerState.abilities.includes("hack-customer")) {
             this.workerState.abilities.push("hack-customer");
           }
-          // Immediately trigger the hack breach!
           this.triggerHackCustomer();
         } else {
           if (this.workerState.abilities.includes(abilityId)) {
@@ -583,8 +595,12 @@ class GameRoom {
             }
             break;
           }
-          this.workerState.balance -= price;
+          this.workerState.balance = Math.max(0, this.workerState.balance - price);
           this.workerState.abilities.push(abilityId);
+        }
+
+        if (abilityId === "static-stabilizer") {
+          this.stabiliserTurnsLeft = 3;
         }
 
         this.broadcast({
@@ -965,9 +981,63 @@ class GameRoom {
 // ============================================
 const rooms = new Map(); // code -> GameRoom
 
+const MIME_TYPES = {
+  ".html": "text/html",
+  ".js": "application/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
+
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // Healthcheck endpoint
+  if (req.url === "/api/health" || req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", game: "WcDonald's: The Anomaly", rooms: rooms.size }));
+    return;
+  }
+
+  // Serve static assets and SPA pages from dist/ if available
+  if (fs.existsSync(DIST_DIR)) {
+    try {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      let filePath = path.join(DIST_DIR, parsedUrl.pathname);
+
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+        filePath = path.join(filePath, "index.html");
+      }
+
+      // SPA fallback for frontend routes (e.g. /room/WCD-XXXX/worker)
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(DIST_DIR, "index.html");
+      }
+
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || "application/octet-stream";
+        res.writeHead(200, { "Content-Type": contentType });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+    } catch {}
+  }
+
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ status: "ok", game: "WcDonald's: The Anomaly", rooms: rooms.size }));
 });

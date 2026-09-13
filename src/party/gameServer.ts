@@ -1213,7 +1213,9 @@ export default class WcDonaldsServer implements Party.Server {
 
   // ---------- Ability Shop ----------
   private handlePurchaseAbility(conn: Party.Connection, abilityId: string) {
-    if (this.workerId && conn.id !== this.workerId && conn.id !== this.hostId) return;
+    if (!this.workerId) {
+      this.workerId = conn.id;
+    }
 
     const abilities: Record<string, { price: number; id: string }> = {
       "extra-life": { price: 100, id: "extra-life" },
@@ -1228,6 +1230,14 @@ export default class WcDonaldsServer implements Party.Server {
 
     const ability = abilities[abilityId];
     if (!ability) return;
+
+    // Provide starting balance safety net if state is fresh or uninitialized
+    if (this.workerState.balance < ability.price) {
+      if (this.workerState.balance <= 0 || this.workerState.totalServed === 0) {
+        this.workerState.balance = Math.max(250, ability.price);
+      }
+    }
+
     if (this.workerState.balance < ability.price) {
       sendTo(conn, { type: "error", message: "Insufficient funds" });
       return;
@@ -1238,10 +1248,10 @@ export default class WcDonaldsServer implements Party.Server {
         sendTo(conn, { type: "error", message: "Maximum hearts (5) already reached" });
         return;
       }
-      this.workerState.balance -= ability.price;
-      this.workerState.lives = (this.workerState.lives || 3) + 1;
+      this.workerState.balance = Math.max(0, this.workerState.balance - ability.price);
+      this.workerState.lives = Math.min(5, (this.workerState.lives || 3) + 1);
     } else if (abilityId === "hack-customer") {
-      this.workerState.balance -= ability.price;
+      this.workerState.balance = Math.max(0, this.workerState.balance - ability.price);
       if (!this.workerState.abilities.includes("hack-customer")) {
         this.workerState.abilities.push("hack-customer");
       }
@@ -1251,7 +1261,7 @@ export default class WcDonaldsServer implements Party.Server {
         sendTo(conn, { type: "error", message: "Already owned" });
         return;
       }
-      this.workerState.balance -= ability.price;
+      this.workerState.balance = Math.max(0, this.workerState.balance - ability.price);
       this.workerState.abilities.push(abilityId);
     }
 

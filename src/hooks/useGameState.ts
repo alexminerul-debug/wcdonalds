@@ -21,8 +21,25 @@ export function useGameState(socket: PartySocket | null) {
   const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
   const [currentTurn, setCurrentTurn] = useState<TurnState | null>(null);
   const [workerState, setWorkerState] = useState<WorkerState>({
-    cart: [], balance: 0, lives: 3, abilities: [], totalServed: 0, totalCaught: 0
+    cart: [], balance: 250, lives: 3, abilities: [], totalServed: 0, totalCaught: 0
   });
+
+  const purchaseAbilityOptimistic = (abilityId: string, price: number) => {
+    setWorkerState(prev => {
+      const isExtraLife = abilityId === 'extra-life';
+      const isHack = abilityId === 'hack-customer';
+      const newLives = isExtraLife ? Math.min(5, (prev.lives || 3) + 1) : (prev.lives || 3);
+      const newAbilities = (!isExtraLife && !isHack && !prev.abilities.includes(abilityId))
+        ? [...prev.abilities, abilityId]
+        : prev.abilities;
+      return {
+        ...prev,
+        balance: Math.max(0, prev.balance - price),
+        lives: newLives,
+        abilities: newAbilities,
+      };
+    });
+  };
   const [secretRole, setSecretRole] = useState<SecretRole | null>(null);
   const [secretOrder, setSecretOrder] = useState<MenuItem[] | null>(null);
   const [secretTraits, setSecretTraits] = useState<AnomalyTrait[] | null>(null);
@@ -202,6 +219,10 @@ export function useGameState(socket: PartySocket | null) {
               setGameState(prev => prev ? { ...prev, phase: 'game_over', roundResults: msg.results } : null);
             }
             break;
+
+          case 'error':
+            console.warn('Game server notice/error:', msg.message);
+            break;
         }
       } catch (err) {
         console.error('Error parsing game state message:', err);
@@ -220,6 +241,8 @@ export function useGameState(socket: PartySocket | null) {
     isMyTurn,
     currentTurn,
     workerState,
+    setWorkerState,
+    purchaseAbilityOptimistic,
     secretRole,
     secretOrder,
     secretTraits,
