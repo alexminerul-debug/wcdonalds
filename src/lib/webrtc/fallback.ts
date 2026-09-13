@@ -12,6 +12,7 @@ export class CanvasSnapshotBroadcaster {
   private processStartTime = 0;
   private frameCount = 0;
   private lastFpsTime = Date.now();
+  private lastSnapshotTime = 0;
   private pauseListener?: () => void;
   private visibilityListener?: () => void;
 
@@ -72,8 +73,8 @@ export class CanvasSnapshotBroadcaster {
     if (this.video.readyState < 2 || this.video.videoWidth === 0) return;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 
-    // Skip frame if network buffer is backlogged (prevents queue buildup & latency)
-    if (typeof this.socket.bufferedAmount === "number" && this.socket.bufferedAmount > 32 * 1024) {
+    // Skip frame only if network buffer is severely backlogged (> 128KB)
+    if (typeof this.socket.bufferedAmount === "number" && this.socket.bufferedAmount > 128 * 1024) {
       return;
     }
 
@@ -106,8 +107,9 @@ export class CanvasSnapshotBroadcaster {
         this.lastFpsTime = now;
       }
 
-      // Periodically trigger snapshot for AI analysis (every ~3 seconds)
-      if (this.onSnapshot && this.frameCount % (this.fps * 3) === 0) {
+      // Periodically trigger snapshot for AI analysis (every ~3 seconds based on timestamps)
+      if (this.onSnapshot && now - this.lastSnapshotTime >= 3000) {
+        this.lastSnapshotTime = now;
         this.onSnapshot(dataUrl);
       }
     } catch {
@@ -115,6 +117,10 @@ export class CanvasSnapshotBroadcaster {
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  public sendImmediateFrame() {
+    this.captureAndSend();
   }
 
   public stop() {
@@ -132,7 +138,7 @@ export class CanvasSnapshotBroadcaster {
 }
 
 export class CanvasSnapshotViewer {
-  private canvas: HTMLCanvasElement;
+  public readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private socket: PartySocket;
   private activeImg: HTMLImageElement;
@@ -142,6 +148,7 @@ export class CanvasSnapshotViewer {
   private frameSeq = 0;
   private lastRenderedSeq = 0;
   private animFrameId: number | null = null;
+  private intervalId: number | null = null;
   private messageHandler: (event: MessageEvent) => void;
   private destroyed = false;
 
@@ -204,16 +211,13 @@ export class CanvasSnapshotViewer {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "cctv-frame" && msg.frame) {
-        // Use a local monotonic counter for frame ordering since camera
-        // and viewer devices may have different system clocks (clock skew).
-        // We NEVER compare msg.ts against local Date.now() — that was the
-        // root cause of the freeze bug (any clock difference > threshold
-        // caused every frame to be silently dropped).
+        // Frame received over network - inform viewer watchdog that stream is alive
+        this.onFrameReceived?.();
+
         this.frameSeq++;
         const frameSeq = this.frameSeq;
 
         // Only drop frames that are older than what we've already rendered
-        // (using our own monotonic sequence, not cross-device timestamps)
         if (frameSeq <= this.lastRenderedSeq) {
           return;
         }
@@ -225,7 +229,7 @@ export class CanvasSnapshotViewer {
   }
 
   private startRenderLoop() {
-    const tick = () => {
+    const processFrame = () => {
       if (this.destroyed) return;
 
       const now = Date.now();
@@ -244,11 +248,17 @@ export class CanvasSnapshotViewer {
         this.decodeStartTime = now;
         this.activeImg.src = toRender.frame;
       }
+    };
 
+    const tick = () => {
+      if (this.destroyed) return;
+      processFrame();
       this.animFrameId = requestAnimationFrame(tick);
     };
 
     this.animFrameId = requestAnimationFrame(tick);
+    // Secondary timer ensures frame decoding continues even if browser throttles requestAnimationFrame
+    this.intervalId = window.setInterval(processFrame, 50);
   }
 
   public destroy() {
@@ -256,6 +266,10 @@ export class CanvasSnapshotViewer {
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
+    }
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
     }
     try {
       this.socket.removeEventListener("message", this.messageHandler);

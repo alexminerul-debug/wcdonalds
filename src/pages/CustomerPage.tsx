@@ -56,7 +56,7 @@ export default function CustomerPage() {
   const humanCustomers = (gameState?.players || []).filter((p) => p.role === "customer");
   const isOnlyCustomer = humanCustomers.length <= 1;
   const isCurrentTurnPlayer = Boolean(currentTurn && myId && currentTurn.playerId === myId);
-  const isOnlyCustomerTurn = Boolean(isOnlyCustomer && currentTurn && !currentTurn.playerId?.startsWith("npc"));
+  const isOnlyCustomerTurn = Boolean(isOnlyCustomer && currentTurn);
   const isMyActiveTurn = isMyTurn || isCurrentTurnPlayer || isOnlyCustomerTurn;
 
   const isPaymentPhase = currentTurn?.phase === "payment";
@@ -78,21 +78,15 @@ export default function CustomerPage() {
       : null);
 
   // If a payment request was received OR current turn is in payment phase,
-  // show payment modal to the customer without fragile ID checks
-  const isEligibleCustomer =
-    isMyActiveTurn ||
-    isOnlyCustomer ||
-    !currentTurn ||
-    currentTurn.playerId === myId ||
-    !currentTurn.playerId?.startsWith("npc");
-
+  // show payment modal to the customer immediately
   const shouldShowPayment = Boolean(
-    activePayment && (paymentRequest || isPaymentPhase) && isEligibleCustomer
+    activePayment && (paymentRequest || isPaymentPhase)
   );
 
-  // When payment is requested, automatically dismiss blocking overlays
+  // When payment is requested, immediately dismiss any blocking screens/overlays
   useEffect(() => {
     if (shouldShowPayment) {
+      setResultDismissed(true);
       setShowRoleCard(false);
       setShowMenuPreview(false);
     }
@@ -228,6 +222,7 @@ export default function CustomerPage() {
 
   // ---- RESULT SCREENS (current turn resolved and it was this player) ----
   if (
+    !shouldShowPayment &&
     lastResult &&
     (currentTurn?.playerId === myId || isOnlyCustomer) &&
     currentTurn?.phase === "resolved" &&

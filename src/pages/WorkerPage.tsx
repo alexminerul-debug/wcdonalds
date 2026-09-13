@@ -47,12 +47,12 @@ export default function WorkerPage() {
     }
   }, [socket, startViewing, sendMessage]);
 
-  // Listen for camera-ready message or cameraId changes to reconnect feed
+  // Re-bind camera feed on cameraId change or when switching to CCTV tab
   useEffect(() => {
-    if (gameState?.cameraId) {
+    if (gameState?.cameraId || activeTab === 'cctv') {
       startViewing();
     }
-  }, [gameState?.cameraId, startViewing]);
+  }, [gameState?.cameraId, activeTab, startViewing]);
 
   useEffect(() => {
     if (!socket) return;

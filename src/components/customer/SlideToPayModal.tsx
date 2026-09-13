@@ -79,7 +79,7 @@ export function SlideToPayModal({ total = 0, items = [], onPaymentComplete }: Sl
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[100] flex flex-col justify-between overflow-hidden touch-none select-none bg-void/95 backdrop-blur-sm transition-colors duration-200 p-4 pb-8"
+      className="fixed inset-0 z-[999] flex flex-col justify-between overflow-hidden touch-none select-none bg-void/95 backdrop-blur-sm transition-colors duration-200 p-4 pb-8"
       style={{
         backgroundColor: isSuccess ? "rgba(0,255,0,0.25)" : `rgba(0, 255, 0, ${progress * 0.15})`,
       }}
@@ -147,6 +147,9 @@ export function SlideToPayModal({ total = 0, items = [], onPaymentComplete }: Sl
               onClick={(e) => {
                 e.stopPropagation();
                 triggerSuccess();
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
               }}
               onTouchEnd={(e) => {
                 e.stopPropagation();

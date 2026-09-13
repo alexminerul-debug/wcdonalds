@@ -260,6 +260,7 @@ export default function CameraPage() {
           const data = JSON.parse(event.data);
           if (data.type === 'viewer-join') {
             sendMessage({ type: 'camera-ready' });
+            fallbackBroadcasterRef.current?.sendImmediateFrame();
           }
         }
       } catch {}

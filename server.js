@@ -459,22 +459,22 @@ class GameRoom {
       }
 
       case "cctv-frame": {
-        let worker = this.workerId ? this.connections.get(this.workerId) : null;
-        if (!worker || worker.readyState !== WebSocket.OPEN) {
-          for (const [connId, client] of this.connections.entries()) {
-            const player = this.players.get(connId);
-            if (player && player.role === "worker" && client.readyState === WebSocket.OPEN) {
-              this.workerId = connId;
-              worker = client;
-              break;
-            }
+        let sent = false;
+        const frameData = JSON.stringify({ type: "cctv-frame", frame: msg.frame, ts: msg.ts || Date.now() });
+
+        for (const [connId, client] of this.connections.entries()) {
+          const player = this.players.get(connId);
+          if ((player?.role === "worker" || connId === this.workerId) && client.readyState === WebSocket.OPEN) {
+            client.send(frameData);
+            sent = true;
           }
         }
-        if ((!worker || worker.readyState !== WebSocket.OPEN) && this.hostId) {
-          worker = this.connections.get(this.hostId) || null;
-        }
-        if (worker && worker.readyState === WebSocket.OPEN) {
-          worker.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame, ts: msg.ts || Date.now() }));
+
+        if (!sent && this.hostId) {
+          const hostClient = this.connections.get(this.hostId);
+          if (hostClient && hostClient.readyState === WebSocket.OPEN) {
+            hostClient.send(frameData);
+          }
         }
 
         // Also feed cctv frame to AI detection engine if anomaly turn is active (every 3.0s)

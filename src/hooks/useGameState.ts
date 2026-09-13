@@ -76,7 +76,19 @@ export function useGameState(socket: PartySocket | null) {
             setCurrentTurn(msg.state.currentTurn);
             if (msg.state.currentTurn?.paymentRequest) {
               setPaymentRequest(msg.state.currentTurn.paymentRequest);
-            } else if (msg.state.currentTurn?.phase !== 'payment') {
+            } else if (msg.state.currentTurn?.phase === 'payment') {
+              // Maintain existing payment request or synthesize fallback from order
+              setPaymentRequest((prev) => {
+                if (prev) return prev;
+                const fallbackItems = (msg.state.currentTurn?.assignedOrder || []).map((item) => ({
+                  menuItem: item,
+                  quantity: 1,
+                }));
+                const fallbackTotal =
+                  fallbackItems.reduce((s, i) => s + (i.menuItem?.price || 5), 0) || 5.0;
+                return { total: fallbackTotal, items: fallbackItems };
+              });
+            } else {
               setPaymentRequest(null);
             }
             const currentMyId = myIdRef.current;

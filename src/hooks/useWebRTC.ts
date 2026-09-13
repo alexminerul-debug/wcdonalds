@@ -20,10 +20,11 @@ export function useWebRTC(
     if (watchdogTimerRef.current) {
       clearTimeout(watchdogTimerRef.current);
     }
+    // Generous 20-second watchdog accommodates mobile tab switches and garbage collection
     watchdogTimerRef.current = window.setTimeout(() => {
       setConnectionMode('disconnected');
       setIsConnected(false);
-    }, 8000);
+    }, 20000);
   }, []);
 
   const startBroadcasting = useCallback(async (): Promise<MediaStream | null> => {
@@ -51,11 +52,22 @@ export function useWebRTC(
   const startViewing = useCallback(() => {
     if (!socket || !canvasRef.current) return;
 
+    // If viewer already exists for this exact canvas, update socket and ping broadcaster
     if (viewerRef.current) {
-      viewerRef.current.updateSocket(socket);
-      // Ensure watchdog is running even on reconnect
-      resetWatchdog();
-      return;
+      if (viewerRef.current.canvas === canvasRef.current) {
+        viewerRef.current.updateSocket(socket);
+        resetWatchdog();
+        try {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'viewer-join', viewerId: socket.id }));
+          }
+        } catch {}
+        return;
+      } else {
+        // Canvas element changed (e.g. tab switched) - recreate viewer
+        viewerRef.current.destroy();
+        viewerRef.current = null;
+      }
     }
 
     const viewer = new CanvasSnapshotViewer(canvasRef.current, socket);
@@ -67,8 +79,6 @@ export function useWebRTC(
 
     viewerRef.current = viewer;
 
-    // Show canvas optimistically (it will revert to 'disconnected' via
-    // watchdog if no frames arrive within 8 seconds)
     setConnectionMode('canvas');
     resetWatchdog();
 
@@ -86,6 +96,39 @@ export function useWebRTC(
       startViewing();
     }
   }, [role, socket, canvasRef.current, startViewing]);
+
+  // Active Auto-Recovery Loop: keeps stream alive and auto-recovers from packet loss or tab switches
+  useEffect(() => {
+    if (role !== 'viewer' || !socket) return;
+
+    const recoveryInterval = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify({ type: 'viewer-join', viewerId: socket.id }));
+        } catch {}
+      }
+    }, 3500);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startViewing();
+        if (socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send(JSON.stringify({ type: 'viewer-join', viewerId: socket.id }));
+          } catch {}
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(recoveryInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [role, socket, startViewing]);
 
   // Update socket on viewer / broadcaster if socket instance changes
   useEffect(() => {

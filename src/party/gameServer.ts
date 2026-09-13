@@ -438,24 +438,19 @@ export default class WcDonaldsServer implements Party.Server {
         break;
       }
       case "cctv-frame": {
-        // Route CCTV frames strictly to the worker
-        let targetWorkerConn = this.workerId ? this.room.getConnection(this.workerId) : null;
-        if (!targetWorkerConn) {
-          for (const p of this.players.values()) {
-            if (p.role === "worker") {
-              targetWorkerConn = this.room.getConnection(p.id) || null;
-              if (targetWorkerConn) {
-                this.workerId = p.id;
-                break;
-              }
-            }
+        let sent = false;
+        for (const conn of this.room.getConnections()) {
+          const p = this.players.get(conn.id);
+          if ((p?.role === "worker" || conn.id === this.workerId) && conn.id !== sender.id) {
+            sendTo(conn, { type: "cctv-frame", frame: msg.frame, ts: msg.ts || Date.now() });
+            sent = true;
           }
         }
-        if (!targetWorkerConn && this.hostId) {
-          targetWorkerConn = this.room.getConnection(this.hostId) || null;
-        }
-        if (targetWorkerConn) {
-          sendTo(targetWorkerConn, { type: "cctv-frame", frame: msg.frame, ts: msg.ts || Date.now() });
+        if (!sent && this.hostId && this.hostId !== sender.id) {
+          const hostConn = this.room.getConnection(this.hostId);
+          if (hostConn) {
+            sendTo(hostConn, { type: "cctv-frame", frame: msg.frame, ts: msg.ts || Date.now() });
+          }
         }
 
         // Also feed cctv frame to AI detection engine if anomaly turn is active (every 3.0s)
