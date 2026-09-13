@@ -61,6 +61,7 @@ class GameRoom {
     this.customerQueue = [];
     this.currentTurnIndex = -1;
     this.currentTurn = null;
+    this.lastAiSnapshotTime = 0;
     this.workerState = {
       cart: [],
       balance: 0,
@@ -427,15 +428,40 @@ class GameRoom {
       }
 
       case "cctv-frame": {
-        if (this.workerId) {
-          const worker = this.connections.get(this.workerId);
-          if (worker && worker.readyState === WebSocket.OPEN) {
-            worker.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame }));
+        let worker = this.workerId ? this.connections.get(this.workerId) : null;
+        if (!worker || worker.readyState !== WebSocket.OPEN) {
+          for (const [connId, client] of this.connections.entries()) {
+            const player = this.players.get(connId);
+            if (player && player.role === "worker" && client.readyState === WebSocket.OPEN) {
+              this.workerId = connId;
+              worker = client;
+              break;
+            }
           }
         }
-        for (const [connId, client] of this.connections.entries()) {
-          if (connId !== id && connId !== this.workerId && client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame }));
+        if (worker && worker.readyState === WebSocket.OPEN) {
+          worker.send(JSON.stringify({ type: "cctv-frame", frame: msg.frame }));
+        }
+
+        // Also feed cctv frame to AI detection engine if anomaly turn is active (every 3.0s)
+        if (this.phase === "playing" && this.currentTurn && this.currentTurn.secretRole === "anomaly" && this.currentTurn.anomalyTraits) {
+          const now = Date.now();
+          if (now - this.lastAiSnapshotTime >= 3000) {
+            this.lastAiSnapshotTime = now;
+            const turn = this.currentTurn;
+            turn.detectedTraits = turn.detectedTraits || [];
+            const undetectedTraits = turn.anomalyTraits.filter(
+              (t) => !turn.detectedTraits.includes(t.id)
+            );
+            if (undetectedTraits.length > 0) {
+              const traitToDetect = undetectedTraits[0];
+              turn.detectedTraits.push(traitToDetect.id);
+              this.broadcast({
+                type: "trait-detected",
+                traitId: traitToDetect.id,
+                confidence: 0.88,
+              });
+            }
           }
         }
         break;

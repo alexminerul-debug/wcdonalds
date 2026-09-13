@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { PartySocket } from 'partysocket';
-import { ServerMessage } from '@/shared/types';
-import { BroadcasterStreamer } from '@/lib/webrtc/broadcaster';
-import { HybridStreamManager, StreamMode } from '@/lib/webrtc/hybridStream';
+import { CanvasSnapshotViewer, CanvasSnapshotBroadcaster } from '@/lib/webrtc/fallback';
+
+export type StreamMode = 'webrtc' | 'canvas' | 'disconnected';
 
 export function useWebRTC(
   role: 'broadcaster' | 'viewer',
@@ -12,18 +12,32 @@ export function useWebRTC(
 ) {
   const [connectionMode, setConnectionMode] = useState<StreamMode>('disconnected');
   const [isConnected, setIsConnected] = useState(false);
-  const streamerRef = useRef<BroadcasterStreamer | null>(null);
-  const managerRef = useRef<HybridStreamManager | null>(null);
+  const broadcasterRef = useRef<CanvasSnapshotBroadcaster | null>(null);
+  const viewerRef = useRef<CanvasSnapshotViewer | null>(null);
+  const watchdogTimerRef = useRef<number | null>(null);
+
+  const resetWatchdog = useCallback(() => {
+    if (watchdogTimerRef.current) {
+      clearTimeout(watchdogTimerRef.current);
+    }
+    watchdogTimerRef.current = window.setTimeout(() => {
+      setConnectionMode('disconnected');
+      setIsConnected(false);
+    }, 4500);
+  }, []);
 
   const startBroadcasting = useCallback(async (): Promise<MediaStream | null> => {
     if (!socket || !videoRef.current) return null;
 
     try {
-      if (!streamerRef.current) {
-        streamerRef.current = new BroadcasterStreamer(socket);
+      if (!broadcasterRef.current) {
+        const broadcaster = new CanvasSnapshotBroadcaster(videoRef.current, socket, 8);
+        broadcaster.start();
+        broadcasterRef.current = broadcaster;
+      } else {
+        broadcasterRef.current.updateSocket(socket);
       }
-      await streamerRef.current.startCamera(videoRef.current);
-      setConnectionMode('webrtc');
+      setConnectionMode('canvas');
       setIsConnected(true);
       return videoRef.current.srcObject as MediaStream;
     } catch (err) {
@@ -35,72 +49,47 @@ export function useWebRTC(
   }, [socket, videoRef]);
 
   const startViewing = useCallback(() => {
-    if (!socket || !videoRef.current || !canvasRef.current) return;
+    if (!socket || !canvasRef.current) return;
 
-    if (managerRef.current) {
-      managerRef.current.stop();
+    if (viewerRef.current) {
+      viewerRef.current.updateSocket(socket);
+      return;
     }
 
-    const viewerId = socket.id || `viewer-${Math.random().toString(36).substring(2, 9)}`;
-    const manager = new HybridStreamManager(
-      socket,
-      videoRef.current,
-      canvasRef.current,
-      viewerId
-    );
-
-    manager.onModeChange = (mode) => {
-      setConnectionMode(mode);
-      setIsConnected(mode !== 'disconnected');
+    const viewer = new CanvasSnapshotViewer(canvasRef.current, socket);
+    viewer.onFrameReceived = () => {
+      setConnectionMode('canvas');
+      setIsConnected(true);
+      resetWatchdog();
     };
 
-    manager.start();
-    managerRef.current = manager;
-  }, [socket, videoRef, canvasRef]);
+    viewerRef.current = viewer;
+  }, [socket, canvasRef, resetWatchdog]);
 
-  // Handle fallback base64 frames if sent as cctv-frame
+  // Update socket on viewer if socket instance changes
   useEffect(() => {
-    if (!socket || role !== 'viewer') return;
-
-    const handleFrameMessage = (event: MessageEvent) => {
-      try {
-        if (typeof event.data === 'string') {
-          const msg = JSON.parse(event.data) as ServerMessage;
-          if (msg.type === 'cctv-frame' && msg.frame && canvasRef.current) {
-            setConnectionMode('canvas');
-            setIsConnected(true);
-            const canvas = canvasRef.current;
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            img.onload = () => {
-              if (canvas.width !== img.width || canvas.height !== img.height) {
-                canvas.width = img.width;
-                canvas.height = img.height;
-              }
-              ctx?.drawImage(img, 0, 0);
-            };
-            img.src = msg.frame;
-          }
-        }
-      } catch (e) {
-        // Non-JSON or binary is handled by CanvasSnapshotViewer
-      }
-    };
-
-    socket.addEventListener('message', handleFrameMessage);
-    return () => socket.removeEventListener('message', handleFrameMessage);
-  }, [socket, role]);
+    if (socket && viewerRef.current) {
+      viewerRef.current.updateSocket(socket);
+    }
+    if (socket && broadcasterRef.current) {
+      broadcasterRef.current.updateSocket(socket);
+    }
+  }, [socket]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (managerRef.current) {
-        managerRef.current.stop();
-        managerRef.current = null;
+      if (watchdogTimerRef.current) {
+        clearTimeout(watchdogTimerRef.current);
+        watchdogTimerRef.current = null;
       }
-      if (streamerRef.current) {
-        streamerRef.current.stop();
-        streamerRef.current = null;
+      if (viewerRef.current) {
+        viewerRef.current.destroy();
+        viewerRef.current = null;
+      }
+      if (broadcasterRef.current) {
+        broadcasterRef.current.stop();
+        broadcasterRef.current = null;
       }
       setConnectionMode('disconnected');
       setIsConnected(false);

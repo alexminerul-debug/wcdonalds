@@ -3,8 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useGameSocket } from "@/hooks/useGameSocket";
 import { useGameState } from "@/hooks/useGameState";
 import { SecurityHUD } from "@/components/camera/SecurityHUD";
-import { SnapshotEngine } from "@/components/camera/SnapshotEngine";
-import { BroadcasterStreamer } from "@/lib/webrtc/broadcaster";
 import { CanvasSnapshotBroadcaster } from "@/lib/webrtc/fallback";
 import { Camera, ArrowLeft, RefreshCw, AlertTriangle, SwitchCamera } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
@@ -26,7 +24,6 @@ export default function CameraPage() {
   const { gameState } = useGameState(socket);
 
   const streamRef = useRef<MediaStream | null>(null);
-  const streamerRef = useRef<BroadcasterStreamer | null>(null);
   const fallbackBroadcasterRef = useRef<CanvasSnapshotBroadcaster | null>(null);
   const wakeLockRef = useRef<any>(null);
 
@@ -157,41 +154,39 @@ export default function CameraPage() {
     }
   };
 
-  const setupBroadcasters = (stream: MediaStream) => {
-    if (!socket || !videoRef.current) return;
+  const setupBroadcasters = useCallback(
+    (stream: MediaStream) => {
+      if (!videoRef.current) return;
 
-    if (streamerRef.current) {
-      streamerRef.current.stop();
-      streamerRef.current = null;
-    }
-    if (fallbackBroadcasterRef.current) {
-      fallbackBroadcasterRef.current.stop();
-      fallbackBroadcasterRef.current = null;
-    }
+      if (!fallbackBroadcasterRef.current) {
+        const fallback = new CanvasSnapshotBroadcaster(videoRef.current, socket, 8);
+        fallback.onFps = (currentFps) => setFps(currentFps);
+        fallback.onSnapshot = (dataUrl) => {
+          if (socket && gameState?.phase === "playing") {
+            sendMessage({ type: "camera-snapshot", dataUrl });
+          }
+        };
+        fallback.start();
+        fallbackBroadcasterRef.current = fallback;
+      } else if (socket) {
+        fallbackBroadcasterRef.current.updateSocket(socket);
+      }
 
-    // Start WebRTC broadcaster
-    try {
-      const streamer = new BroadcasterStreamer(socket);
-      // @ts-ignore
-      streamer.stream = stream;
-      streamerRef.current = streamer;
-    } catch {}
-
-    // Start Canvas Fallback broadcaster (5 FPS lightweight stable CCTV stream)
-    try {
-      const fallback = new CanvasSnapshotBroadcaster(videoRef.current, socket, 5);
-      fallback.start();
-      fallbackBroadcasterRef.current = fallback;
-    } catch {}
-
-    // Announce camera ready to worker
-    sendMessage({ type: "camera-ready" });
-  };
+      if (socket && connectionStatus === "connected") {
+        sendMessage({ type: "camera-ready" });
+      }
+    },
+    [socket, connectionStatus, gameState?.phase, sendMessage]
+  );
 
   // Flip camera between front & back
   const handleFlipCamera = async () => {
     const nextMode = facingMode === "environment" ? "user" : "environment";
     setFacingMode(nextMode);
+    if (fallbackBroadcasterRef.current) {
+      fallbackBroadcasterRef.current.stop();
+      fallbackBroadcasterRef.current = null;
+    }
     await startCamera(nextMode);
   };
 
@@ -204,11 +199,9 @@ export default function CameraPage() {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
-      if (streamerRef.current) {
-        streamerRef.current.stop();
-      }
       if (fallbackBroadcasterRef.current) {
         fallbackBroadcasterRef.current.stop();
+        fallbackBroadcasterRef.current = null;
       }
       if (wakeLockRef.current) {
         try {
@@ -218,15 +211,36 @@ export default function CameraPage() {
     };
   }, []);
 
-  // Update socket on broadcaster when socket updates WITHOUT destroying stream or interval
+  // Ensure broadcaster is running as soon as camera is ready and socket connects
   useEffect(() => {
-    if (socket && fallbackBroadcasterRef.current && cameraReady) {
-      fallbackBroadcasterRef.current.updateSocket(socket);
-      if (connectionStatus === "connected") {
-        sendMessage({ type: "camera-ready" });
-      }
+    if (cameraReady && videoRef.current && streamRef.current) {
+      setupBroadcasters(streamRef.current);
     }
-  }, [socket, connectionStatus, cameraReady, sendMessage]);
+  }, [socket, connectionStatus, cameraReady, setupBroadcasters]);
+
+  // Keep camera playing & maintain screen wake lock on mobile visibility changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (videoRef.current && videoRef.current.paused) {
+        videoRef.current.play().catch(() => {});
+      }
+    }, 1500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        requestWakeLock();
+        if (videoRef.current && videoRef.current.paused) {
+          videoRef.current.play().catch(() => {});
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   // Join room and claim camera role on socket
   useEffect(() => {
@@ -235,17 +249,6 @@ export default function CameraPage() {
       sendMessage({ type: "claim-role", role: "camera" });
     }
   }, [socket, connectionStatus, sendMessage]);
-
-  // Send snapshots for AI analysis (throttled to 3.0s)
-  const handleSnapshot = useCallback(
-    (dataUrl: string) => {
-      if (socket && gameState?.phase === "playing") {
-        sendMessage({ type: "camera-snapshot", dataUrl });
-      }
-      updateFps();
-    },
-    [socket, gameState?.phase, sendMessage, updateFps]
-  );
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden select-none font-mono">
@@ -291,18 +294,6 @@ export default function CameraPage() {
         />
       )}
 
-      {/* Snapshot Engine for AI (runs every 3.0s) */}
-      {cameraReady && videoRef.current && (
-        <SnapshotEngine
-          videoElement={videoRef.current}
-          onSnapshot={handleSnapshot}
-          intervalMs={3000}
-          targetWidth={480}
-          targetHeight={360}
-          quality={0.65}
-          active={gameState?.phase === "playing"}
-        />
-      )}
 
       {/* Pre-activation / User gesture prompt screen for mobile */}
       {!cameraReady && (

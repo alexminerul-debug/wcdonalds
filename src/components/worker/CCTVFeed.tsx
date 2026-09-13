@@ -81,13 +81,9 @@ export function CCTVFeed({
           <div className="absolute inset-0 z-20 pointer-events-none p-4 flex flex-col justify-between">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2 bg-black/50 px-2 py-1 rounded">
-                <div className={clsx(
-                  "w-3 h-3 rounded-full animate-pulse",
-                  connectionMode === 'webrtc' ? 'bg-safe' : 
-                  connectionMode === 'canvas' ? 'bg-amber-glow' : 'bg-blood'
-                )} />
+                <div className="w-3 h-3 rounded-full animate-pulse bg-safe" />
                 <span className="font-mono text-xs text-bone">
-                  CAM_01 // {connectionMode.toUpperCase()}
+                  CAM_01 // {connectionMode === 'canvas' ? 'LIVE' : connectionMode.toUpperCase()}
                 </span>
               </div>
               <div className="font-mono text-xs text-bone bg-black/50 px-2 py-1 rounded">

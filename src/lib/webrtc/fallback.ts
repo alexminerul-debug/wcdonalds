@@ -7,18 +7,36 @@ export class CanvasSnapshotBroadcaster {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private intervalId: number | null = null;
-  private quality: number = 0.65;
+  private quality: number = 0.40;
+  private isProcessing = false;
+  private frameCount = 0;
+  private lastFpsTime = Date.now();
+  private pauseListener?: () => void;
+  private visibilityListener?: () => void;
 
-  constructor(video: HTMLVideoElement, socket: PartySocket, fps: number = 10) {
+  public onFps?: (fps: number) => void;
+  public onSnapshot?: (dataUrl: string) => void;
+
+  constructor(video: HTMLVideoElement, socket: PartySocket, fps: number = 8) {
     this.video = video;
     this.socket = socket;
-    this.quality = 0.55;
     this.fps = fps;
     this.canvas = document.createElement("canvas");
     this.ctx = this.canvas.getContext("2d", { alpha: false });
-  }
 
-  private isProcessing = false;
+    // Auto-resume camera if paused by mobile browser
+    this.pauseListener = () => {
+      this.video.play().catch(() => {});
+    };
+    this.video.addEventListener("pause", this.pauseListener);
+
+    this.visibilityListener = () => {
+      if (document.visibilityState === "visible") {
+        this.video.play().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", this.visibilityListener);
+  }
 
   public updateSocket(socket: PartySocket) {
     this.socket = socket;
@@ -31,27 +49,26 @@ export class CanvasSnapshotBroadcaster {
 
   private captureAndSend() {
     if (this.isProcessing) return;
-    
-    // Auto-resume if video was paused by browser
+
     if (this.video.paused) {
       this.video.play().catch(() => {});
     }
 
     if (this.video.readyState < 2 || this.video.videoWidth === 0) return;
-    if (this.socket.readyState !== WebSocket.OPEN) return;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 
-    // Check socket backpressure: skip frame if buffer is backlogged (> 32KB)
-    if (this.socket.bufferedAmount > 32 * 1024) {
+    // Skip frame if buffer is severely backlogged (> 128 KB), but do not halt stream
+    if (typeof this.socket.bufferedAmount === "number" && this.socket.bufferedAmount > 128 * 1024) {
       return;
     }
 
     this.isProcessing = true;
 
     try {
-      // 384x216 resolution: ultra-stable low memory footprint for mobile
-      const targetWidth = 384;
+      // 360x202 (16:9 standard): ultra-lightweight (~5-7 KB per frame), crystal-clear CCTV fidelity
+      const targetWidth = 360;
       const targetHeight =
-        Math.round((this.video.videoHeight / this.video.videoWidth) * targetWidth) || 216;
+        Math.round((this.video.videoHeight / this.video.videoWidth) * targetWidth) || 202;
 
       if (this.canvas.width !== targetWidth || this.canvas.height !== targetHeight) {
         this.canvas.width = targetWidth;
@@ -60,13 +77,25 @@ export class CanvasSnapshotBroadcaster {
 
       this.ctx?.drawImage(this.video, 0, 0, targetWidth, targetHeight);
 
-      // Single stream: efficient JPEG frame (quality 0.45)
-      const dataUrl = this.canvas.toDataURL("image/jpeg", 0.45);
-      if (this.socket.readyState === WebSocket.OPEN) {
+      const dataUrl = this.canvas.toDataURL("image/jpeg", this.quality);
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
         this.socket.send(JSON.stringify({ type: "cctv-frame", frame: dataUrl }));
       }
-    } catch (err) {
-      // Ignore frame encode errors
+
+      this.frameCount++;
+      const now = Date.now();
+      if (now - this.lastFpsTime >= 1000) {
+        this.onFps?.(this.frameCount);
+        this.frameCount = 0;
+        this.lastFpsTime = now;
+      }
+
+      // Periodically trigger snapshot for AI analysis (every ~3 seconds)
+      if (this.onSnapshot && this.frameCount % (this.fps * 3) === 0) {
+        this.onSnapshot(dataUrl);
+      }
+    } catch {
+      // Ignore frame encoding exceptions
     } finally {
       this.isProcessing = false;
     }
@@ -77,6 +106,12 @@ export class CanvasSnapshotBroadcaster {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+    if (this.pauseListener) {
+      this.video.removeEventListener("pause", this.pauseListener);
+    }
+    if (this.visibilityListener) {
+      document.removeEventListener("visibilitychange", this.visibilityListener);
+    }
   }
 }
 
@@ -84,73 +119,70 @@ export class CanvasSnapshotViewer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private socket: PartySocket;
-  private lastTimestamp: number = 0;
-  public onLatency?: (latency: number) => void;
+  private activeImg: HTMLImageElement;
+  private isDecoding = false;
+  private messageHandler: (event: MessageEvent) => void;
+
   public onFrameReceived?: () => void;
 
   constructor(canvas: HTMLCanvasElement, socket: PartySocket) {
     this.canvas = canvas;
     this.socket = socket;
-    // @ts-ignore
-    this.ctx = this.canvas.getContext("2d", { alpha: false, desynchronized: true });
-    this.socket.addEventListener("message", this.handleMessage.bind(this));
+    this.ctx = this.canvas.getContext("2d", { alpha: false });
+    this.activeImg = new Image();
+
+    this.activeImg.onload = () => {
+      this.isDecoding = false;
+      const w = this.activeImg.naturalWidth || 360;
+      const h = this.activeImg.naturalHeight || 202;
+
+      if (this.canvas.width !== w || this.canvas.height !== h) {
+        this.canvas.width = w;
+        this.canvas.height = h;
+      }
+
+      this.ctx?.drawImage(this.activeImg, 0, 0);
+      this.onFrameReceived?.();
+    };
+
+    this.activeImg.onerror = () => {
+      this.isDecoding = false;
+    };
+
+    this.messageHandler = (event: MessageEvent) => {
+      this.handleMessage(event);
+    };
+
+    this.socket.addEventListener("message", this.messageHandler);
   }
 
-  private async handleMessage(event: MessageEvent) {
-    // Handle JSON string cctv-frame
-    if (typeof event.data === "string") {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "cctv-frame" && msg.frame) {
-          const img = new Image();
-          img.onload = () => {
-            if (this.canvas.width !== img.width || this.canvas.height !== img.height) {
-              this.canvas.width = img.width;
-              this.canvas.height = img.height;
-            }
-            this.ctx?.drawImage(img, 0, 0);
-            this.onFrameReceived?.();
-          };
-          img.src = msg.frame;
-        }
-      } catch {}
-      return;
-    }
-
-    if (!(event.data instanceof Blob) && !(event.data instanceof ArrayBuffer)) return;
-    
-    let buffer: ArrayBuffer;
-    if (event.data instanceof Blob) {
-      buffer = await event.data.arrayBuffer();
-    } else {
-      buffer = event.data;
-    }
-
-    if (buffer.byteLength < 8) return;
-
-    const dataView = new DataView(buffer);
-    const timestamp = dataView.getFloat64(0, true);
-
-    if (timestamp < this.lastTimestamp) return; // Drop stale frames
-    this.lastTimestamp = timestamp;
-
-    if (this.onLatency) {
-      this.onLatency(Date.now() - timestamp);
-    }
-
-    const imageBuffer = buffer.slice(8);
-    const blob = new Blob([imageBuffer], { type: "image/jpeg" });
+  public updateSocket(socket: PartySocket) {
+    if (this.socket === socket) return;
     try {
-      const bitmap = await createImageBitmap(blob);
-      if (this.canvas.width !== bitmap.width || this.canvas.height !== bitmap.height) {
-        this.canvas.width = bitmap.width;
-        this.canvas.height = bitmap.height;
+      this.socket.removeEventListener("message", this.messageHandler);
+    } catch {}
+    this.socket = socket;
+    this.socket.addEventListener("message", this.messageHandler);
+  }
+
+  private handleMessage(event: MessageEvent) {
+    if (typeof event.data !== "string") return;
+    if (!event.data.includes('"cctv-frame"')) return;
+
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "cctv-frame" && msg.frame) {
+        if (!this.isDecoding) {
+          this.isDecoding = true;
+          this.activeImg.src = msg.frame;
+        }
       }
-      this.ctx?.drawImage(bitmap, 0, 0);
-      bitmap.close();
-      this.onFrameReceived?.();
-    } catch (e) {
-      console.error("Bitmap error", e);
-    }
+    } catch {}
+  }
+
+  public destroy() {
+    try {
+      this.socket.removeEventListener("message", this.messageHandler);
+    } catch {}
   }
 }

@@ -233,6 +233,7 @@ export default class WcDonaldsServer implements Party.Server {
   private config: GameConfig = { ...DEFAULT_CONFIG };
   private currentNight = 1;
   private maxNights = 5;
+  private lastAiSnapshotTime = 0;
   private nightTime = "12:00 AM";
   private turnSecrets: Array<{ secretRole: SecretRole; order: MenuItem[]; traits: AnomalyTrait[] | null }> = [];
 
@@ -431,14 +432,31 @@ export default class WcDonaldsServer implements Party.Server {
         break;
       }
       case "cctv-frame": {
-        // Fallback base64 frames: forward to worker
-        if (this.workerId) {
-          const workerConn = this.room.getConnection(this.workerId);
-          if (workerConn) {
-            sendTo(workerConn, { type: "cctv-frame", frame: msg.frame });
+        // Route CCTV frames strictly to the worker
+        let targetWorkerConn = this.workerId ? this.room.getConnection(this.workerId) : null;
+        if (!targetWorkerConn) {
+          for (const p of this.players.values()) {
+            if (p.role === "worker") {
+              targetWorkerConn = this.room.getConnection(p.id) || null;
+              if (targetWorkerConn) {
+                this.workerId = p.id;
+                break;
+              }
+            }
           }
         }
-        this.room.broadcast(JSON.stringify({ type: "cctv-frame", frame: msg.frame }), [sender.id, this.workerId || ""]);
+        if (targetWorkerConn) {
+          sendTo(targetWorkerConn, { type: "cctv-frame", frame: msg.frame });
+        }
+
+        // Also feed cctv frame to AI detection engine if anomaly turn is active (every 3.0s)
+        if (this.phase === "playing" && this.currentTurn?.secretRole === "anomaly") {
+          const now = Date.now();
+          if (now - this.lastAiSnapshotTime >= 3000) {
+            this.lastAiSnapshotTime = now;
+            this.handleCameraSnapshot(sender, msg.frame);
+          }
+        }
         break;
       }
     }
