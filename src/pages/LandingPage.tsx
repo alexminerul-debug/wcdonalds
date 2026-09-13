@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { generateRoomCode } from "@/shared/constants";
 import { Skull, LogIn, Plus, Server } from "lucide-react";
 import { ServerSettingsModal } from "@/components/ui/ServerSettingsModal";
+import { AIVisionTestModal } from "@/components/ui/AIVisionTestModal";
 import { LanguageSelector } from "@/components/common/LanguageSelector";
 
 export default function LandingPage() {
@@ -10,6 +11,7 @@ export default function LandingPage() {
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
   const [serverModalOpen, setServerModalOpen] = useState(false);
+  const [aiTestModalOpen, setAiTestModalOpen] = useState(false);
 
   const handleCreate = () => {
     const code = generateRoomCode();
@@ -45,7 +47,14 @@ export default function LandingPage() {
           <div className="mt-2 text-lg md:text-xl text-fog tracking-[0.5em] uppercase">
             The Anomaly
           </div>
-          <Skull className="mx-auto mt-4 w-10 h-10 text-blood opacity-60" />
+          <button
+            type="button"
+            onClick={() => setAiTestModalOpen(true)}
+            title="AI Vision Diagnostic Bench"
+            className="mx-auto mt-4 p-2 rounded-full hover:bg-blood/20 transition-all cursor-pointer group"
+          >
+            <Skull className="w-10 h-10 text-blood opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+          </button>
         </div>
 
         {/* Create Room Button */}
@@ -125,6 +134,12 @@ export default function LandingPage() {
       <ServerSettingsModal
         isOpen={serverModalOpen}
         onClose={() => setServerModalOpen(false)}
+      />
+
+      {/* Hidden AI Vision Test Modal */}
+      <AIVisionTestModal
+        isOpen={aiTestModalOpen}
+        onClose={() => setAiTestModalOpen(false)}
       />
     </div>
   );

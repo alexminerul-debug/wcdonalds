@@ -18,6 +18,7 @@ import {
   Server,
 } from "lucide-react";
 import { ServerSettingsModal } from "@/components/ui/ServerSettingsModal";
+import { AIVisionTestModal } from "@/components/ui/AIVisionTestModal";
 import { LanguageSelector } from "@/components/common/LanguageSelector";
 import { LeaveRoomButton } from "@/components/common/LeaveRoomButton";
 import { useTranslation } from "@/lib/i18n";
@@ -34,6 +35,7 @@ export default function LobbyPage() {
   const [hasJoined, setHasJoined] = useState(false);
   const [copied, setCopied] = useState(false);
   const [serverModalOpen, setServerModalOpen] = useState(false);
+  const [aiTestModalOpen, setAiTestModalOpen] = useState(false);
 
   const { socket, sendMessage, connectionStatus } = useGameSocket(code || "");
   const {
@@ -356,8 +358,15 @@ export default function LobbyPage() {
 
       {/* Footer */}
       <div className="text-center mt-12">
-        <Skull className="mx-auto w-6 h-6 text-blood/30 mb-2" />
-        <p className="text-fog/30 text-xs tracking-widest uppercase">
+        <button
+          type="button"
+          onClick={() => setAiTestModalOpen(true)}
+          title="AI Vision Diagnostic Bench"
+          className="mx-auto p-1 rounded-full hover:bg-blood/20 transition-all cursor-pointer group"
+        >
+          <Skull className="w-6 h-6 text-blood/30 group-hover:text-blood group-hover:opacity-100 group-hover:scale-110 transition-all" />
+        </button>
+        <p className="text-fog/30 text-xs tracking-widest uppercase mt-1">
           {t("waitingForHost")}
         </p>
       </div>
@@ -366,6 +375,12 @@ export default function LobbyPage() {
       <ServerSettingsModal
         isOpen={serverModalOpen}
         onClose={() => setServerModalOpen(false)}
+      />
+
+      {/* Hidden AI Vision Test Modal */}
+      <AIVisionTestModal
+        isOpen={aiTestModalOpen}
+        onClose={() => setAiTestModalOpen(false)}
       />
     </div>
   );
