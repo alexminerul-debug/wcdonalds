@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
+    "start": "node server.js",
     "deploy": "npm run build && npx wrangler deploy",
     "deploy:party": "npx partykit deploy",
     "deploy:pages": "npm run build && npx wrangler pages deploy dist"
@@ -21,7 +22,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
