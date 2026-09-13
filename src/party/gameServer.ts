@@ -335,15 +335,21 @@ export default class WcDonaldsServer implements Party.Server {
   // ---------- Message Router ----------
   onMessage(message: string | ArrayBuffer, sender: Party.Connection) {
     if (typeof message !== "string") {
-      // Binary video frame fallback from camera: broadcast to worker
-      if (this.workerId && sender.id === this.cameraId) {
-        const workerConn = this.room.getConnection(this.workerId);
-        if (workerConn) {
-          workerConn.send(message);
+      // Binary video frame from camera: route strictly to the worker
+      let targetWorkerConn = this.workerId ? this.room.getConnection(this.workerId) : null;
+      if (!targetWorkerConn) {
+        for (const p of this.players.values()) {
+          if (p.role === "worker") {
+            targetWorkerConn = this.room.getConnection(p.id) || null;
+            if (targetWorkerConn) {
+              this.workerId = p.id;
+              break;
+            }
+          }
         }
-      } else {
-        // Forward binary frame to all other connections in room
-        this.room.broadcast(message, [sender.id]);
+      }
+      if (targetWorkerConn) {
+        targetWorkerConn.send(message);
       }
       return;
     }
@@ -876,8 +882,16 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   private handleRequestPayment(conn: Party.Connection) {
-    if (!this.workerId || conn.id === this.hostId) this.workerId = conn.id;
-    if ((conn.id !== this.workerId && conn.id !== this.hostId) || !this.currentTurn) return;
+    if (!this.currentTurn) return;
+    const isWorker =
+      conn.id === this.workerId ||
+      conn.id === this.hostId ||
+      this.players.get(conn.id)?.role === "worker";
+    if (!isWorker) return;
+
+    if (conn.id !== this.workerId && this.players.get(conn.id)?.role === "worker") {
+      this.workerId = conn.id;
+    }
 
     const total = this.workerState.cart.reduce(
       (sum, item) => sum + item.menuItem.price * item.quantity,
@@ -885,44 +899,54 @@ export default class WcDonaldsServer implements Party.Server {
     );
 
     this.currentTurn.phase = "payment";
+    this.currentTurn.paymentRequest = { total, items: [...this.workerState.cart] };
 
-    // Send payment request to the current customer
-    const customerConn = this.room.getConnection(this.currentTurn.playerId);
-    if (customerConn) {
-      sendTo(customerConn, {
+    // Broadcast payment-request to the room so all customer instances receive it immediately
+    this.room.broadcast(
+      JSON.stringify({
         type: "payment-request",
         total,
         items: this.workerState.cart,
-      });
-    }
+      } as ServerMessage)
+    );
 
     this.broadcastState();
   }
 
   private handlePaymentComplete(conn: Party.Connection) {
-    if (!this.currentTurn || conn.id !== this.currentTurn.playerId) return;
+    if (!this.currentTurn || this.currentTurn.phase !== "payment") return;
 
-    const total = this.workerState.cart.reduce(
-      (sum, item) => sum + item.menuItem.price * item.quantity,
-      0
-    );
+    const total =
+      this.currentTurn.paymentRequest?.total ||
+      this.workerState.cart.reduce(
+        (sum, item) => sum + item.menuItem.price * item.quantity,
+        0
+      );
+
     this.workerState.balance += total;
     this.currentTurn.phase = "deciding";
+    this.currentTurn.paymentRequest = null;
 
-    // Notify worker
-    if (this.workerId) {
-      const workerConn = this.room.getConnection(this.workerId);
-      if (workerConn) {
-        sendTo(workerConn, { type: "payment-received", amount: total });
-      }
-    }
+    // Notify all players of completed payment
+    this.room.broadcast(
+      JSON.stringify({ type: "payment-received", amount: total } as ServerMessage)
+    );
 
     this.broadcastState();
   }
 
   // ---------- Decision Handlers ----------
   private handleServeOrder(conn: Party.Connection) {
-    if (conn.id !== this.workerId || !this.currentTurn) return;
+    if (!this.currentTurn) return;
+    const isWorker =
+      conn.id === this.workerId ||
+      conn.id === this.hostId ||
+      this.players.get(conn.id)?.role === "worker";
+    if (!isWorker) return;
+
+    if (conn.id !== this.workerId && this.players.get(conn.id)?.role === "worker") {
+      this.workerId = conn.id;
+    }
 
     let result: TurnResult;
 
@@ -942,6 +966,7 @@ export default class WcDonaldsServer implements Party.Server {
 
     this.currentTurn.result = result;
     this.currentTurn.phase = "resolved";
+    this.currentTurn.paymentRequest = null;
     this.roundResults.push(result);
 
     // Broadcast result
@@ -970,7 +995,16 @@ export default class WcDonaldsServer implements Party.Server {
   }
 
   private handleReportAnomaly(conn: Party.Connection) {
-    if (conn.id !== this.workerId || !this.currentTurn) return;
+    if (!this.currentTurn) return;
+    const isWorker =
+      conn.id === this.workerId ||
+      conn.id === this.hostId ||
+      this.players.get(conn.id)?.role === "worker";
+    if (!isWorker) return;
+
+    if (conn.id !== this.workerId && this.players.get(conn.id)?.role === "worker") {
+      this.workerId = conn.id;
+    }
 
     let result: TurnResult;
 

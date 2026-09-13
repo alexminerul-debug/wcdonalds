@@ -67,6 +67,11 @@ export function useGameState(socket: PartySocket | null) {
               setCartItems(msg.state.workerState.cart);
             }
             setCurrentTurn(msg.state.currentTurn);
+            if (msg.state.currentTurn?.paymentRequest) {
+              setPaymentRequest(msg.state.currentTurn.paymentRequest);
+            } else if (msg.state.currentTurn?.phase !== 'payment') {
+              setPaymentRequest(null);
+            }
             const myConnId = msg.selfId || myId || socket.id;
             if (msg.selfId) {
               setMyId(msg.selfId);

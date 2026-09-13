@@ -58,6 +58,8 @@ export default function CustomerPage() {
   const isCurrentTurnPlayer = Boolean(currentTurn && myId && currentTurn.playerId === myId);
   const isOnlyCustomerTurn = Boolean(isOnlyCustomer && currentTurn && !currentTurn.playerId.startsWith("npc"));
   const isMyActiveTurn = isMyTurn || isCurrentTurnPlayer || isOnlyCustomerTurn;
+  const activePayment = paymentRequest || currentTurn?.paymentRequest;
+  const shouldShowPayment = Boolean(activePayment && (isMyActiveTurn || !currentTurn?.playerId.startsWith("npc")));
 
   // When a new turn starts for this player, show role card
   useEffect(() => {
@@ -321,10 +323,10 @@ export default function CustomerPage() {
         )}
 
         {/* Payment modal */}
-        {paymentRequest && (
+        {shouldShowPayment && activePayment && (
           <SlideToPayModal
-            total={paymentRequest.total}
-            items={paymentRequest.items}
+            total={activePayment.total}
+            items={activePayment.items}
             onPaymentComplete={handlePaymentComplete}
           />
         )}
@@ -386,6 +388,15 @@ export default function CustomerPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Payment modal (guaranteed to render even if customer was in queue view) */}
+      {shouldShowPayment && activePayment && (
+        <SlideToPayModal
+          total={activePayment.total}
+          items={activePayment.items}
+          onPaymentComplete={handlePaymentComplete}
+        />
       )}
     </div>
   );

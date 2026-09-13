@@ -187,16 +187,19 @@ class GameRoom {
 
     // Handle binary video fallback stream
     if (Buffer.isBuffer(raw) && raw.length > 0 && raw[0] !== 123 /* not '{' */) {
-      if (this.workerId) {
-        const workerWs = this.connections.get(this.workerId);
-        if (workerWs && workerWs.readyState === WebSocket.OPEN) {
-          workerWs.send(raw);
+      let workerWs = this.workerId ? this.connections.get(this.workerId) : null;
+      if (!workerWs || workerWs.readyState !== WebSocket.OPEN) {
+        for (const [connId, clientWs] of this.connections.entries()) {
+          const player = this.players.get(connId);
+          if (player && player.role === "worker" && clientWs.readyState === WebSocket.OPEN) {
+            this.workerId = connId;
+            workerWs = clientWs;
+            break;
+          }
         }
       }
-      for (const [connId, clientWs] of this.connections.entries()) {
-        if (connId !== id && connId !== this.workerId && clientWs.readyState === WebSocket.OPEN) {
-          clientWs.send(raw);
-        }
+      if (workerWs && workerWs.readyState === WebSocket.OPEN) {
+        workerWs.send(raw);
       }
       return;
     }
@@ -331,14 +334,23 @@ class GameRoom {
       }
 
       case "request-payment": {
+        if (!this.currentTurn) break;
         const total = this.workerState.cart.reduce((s, i) => s + i.menuItem.price * i.quantity, 0);
+        this.currentTurn.phase = "payment";
+        this.currentTurn.paymentRequest = { total, items: [...this.workerState.cart] };
         this.broadcast({ type: "payment-request", total, items: this.workerState.cart });
+        this.broadcastState();
         break;
       }
 
       case "payment-complete": {
-        const total = this.workerState.cart.reduce((s, i) => s + i.menuItem.price * i.quantity, 0);
+        if (!this.currentTurn || this.currentTurn.phase !== "payment") break;
+        const total =
+          this.currentTurn.paymentRequest?.total ||
+          this.workerState.cart.reduce((s, i) => s + i.menuItem.price * i.quantity, 0);
         this.workerState.balance += total;
+        this.currentTurn.phase = "deciding";
+        this.currentTurn.paymentRequest = null;
         this.broadcast({ type: "payment-received", amount: total });
         this.broadcastState();
         break;
@@ -356,6 +368,7 @@ class GameRoom {
 
         this.currentTurn.phase = "resolved";
         this.currentTurn.result = result;
+        this.currentTurn.paymentRequest = null;
         this.workerState.cart = [];
         this.broadcast({ type: "serve-result", result });
         this.broadcastState();
@@ -380,6 +393,7 @@ class GameRoom {
 
         this.currentTurn.phase = "resolved";
         this.currentTurn.result = result;
+        this.currentTurn.paymentRequest = null;
         this.workerState.cart = [];
         this.broadcast({ type: "report-result", result });
         this.broadcastState();

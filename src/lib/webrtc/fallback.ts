@@ -7,7 +7,7 @@ export class CanvasSnapshotBroadcaster {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private intervalId: number | null = null;
-  private quality: number = 0.40;
+  private quality: number = 0.35;
   private isProcessing = false;
   private frameCount = 0;
   private lastFpsTime = Date.now();
@@ -17,11 +17,13 @@ export class CanvasSnapshotBroadcaster {
   public onFps?: (fps: number) => void;
   public onSnapshot?: (dataUrl: string) => void;
 
-  constructor(video: HTMLVideoElement, socket: PartySocket, fps: number = 8) {
+  constructor(video: HTMLVideoElement, socket: PartySocket, fps: number = 10) {
     this.video = video;
     this.socket = socket;
     this.fps = fps;
     this.canvas = document.createElement("canvas");
+    this.canvas.width = 320;
+    this.canvas.height = 180;
     this.ctx = this.canvas.getContext("2d", { alpha: false });
 
     // Auto-resume camera if paused by mobile browser
@@ -57,18 +59,18 @@ export class CanvasSnapshotBroadcaster {
     if (this.video.readyState < 2 || this.video.videoWidth === 0) return;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 
-    // Skip frame if buffer is severely backlogged (> 128 KB), but do not halt stream
-    if (typeof this.socket.bufferedAmount === "number" && this.socket.bufferedAmount > 128 * 1024) {
+    // Skip frame if buffer is backlogged, but do not halt stream
+    if (typeof this.socket.bufferedAmount === "number" && this.socket.bufferedAmount > 64 * 1024) {
       return;
     }
 
     this.isProcessing = true;
 
     try {
-      // 360x202 (16:9 standard): ultra-lightweight (~5-7 KB per frame), crystal-clear CCTV fidelity
-      const targetWidth = 360;
+      // 320x180 (16:9 standard): ultra-lightweight (~3-4 KB per frame), instant encode and transmission
+      const targetWidth = 320;
       const targetHeight =
-        Math.round((this.video.videoHeight / this.video.videoWidth) * targetWidth) || 202;
+        Math.round((this.video.videoHeight / this.video.videoWidth) * targetWidth) || 180;
 
       if (this.canvas.width !== targetWidth || this.canvas.height !== targetHeight) {
         this.canvas.width = targetWidth;
@@ -78,12 +80,13 @@ export class CanvasSnapshotBroadcaster {
       this.ctx?.drawImage(this.video, 0, 0, targetWidth, targetHeight);
 
       const dataUrl = this.canvas.toDataURL("image/jpeg", this.quality);
+      const now = Date.now();
+
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-        this.socket.send(JSON.stringify({ type: "cctv-frame", frame: dataUrl }));
+        this.socket.send(JSON.stringify({ type: "cctv-frame", frame: dataUrl, ts: now }));
       }
 
       this.frameCount++;
-      const now = Date.now();
       if (now - this.lastFpsTime >= 1000) {
         this.onFps?.(this.frameCount);
         this.frameCount = 0;
@@ -121,6 +124,8 @@ export class CanvasSnapshotViewer {
   private socket: PartySocket;
   private activeImg: HTMLImageElement;
   private isDecoding = false;
+  private pendingFrame: string | null = null;
+  private lastRenderedTs = 0;
   private messageHandler: (event: MessageEvent) => void;
 
   public onFrameReceived?: () => void;
@@ -132,9 +137,8 @@ export class CanvasSnapshotViewer {
     this.activeImg = new Image();
 
     this.activeImg.onload = () => {
-      this.isDecoding = false;
-      const w = this.activeImg.naturalWidth || 360;
-      const h = this.activeImg.naturalHeight || 202;
+      const w = this.activeImg.naturalWidth || 320;
+      const h = this.activeImg.naturalHeight || 180;
 
       if (this.canvas.width !== w || this.canvas.height !== h) {
         this.canvas.width = w;
@@ -143,10 +147,25 @@ export class CanvasSnapshotViewer {
 
       this.ctx?.drawImage(this.activeImg, 0, 0);
       this.onFrameReceived?.();
+
+      // If a newer frame arrived while decoding, immediately decode it!
+      if (this.pendingFrame) {
+        const next = this.pendingFrame;
+        this.pendingFrame = null;
+        this.activeImg.src = next;
+      } else {
+        this.isDecoding = false;
+      }
     };
 
     this.activeImg.onerror = () => {
       this.isDecoding = false;
+      if (this.pendingFrame) {
+        const next = this.pendingFrame;
+        this.pendingFrame = null;
+        this.isDecoding = true;
+        this.activeImg.src = next;
+      }
     };
 
     this.messageHandler = (event: MessageEvent) => {
@@ -172,9 +191,20 @@ export class CanvasSnapshotViewer {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "cctv-frame" && msg.frame) {
+        // Drop stale or delayed frames from TCP transit backlog
+        if (msg.ts && msg.ts < this.lastRenderedTs) {
+          return;
+        }
+        if (msg.ts) {
+          this.lastRenderedTs = msg.ts;
+        }
+
         if (!this.isDecoding) {
           this.isDecoding = true;
           this.activeImg.src = msg.frame;
+        } else {
+          // Keep newest frame to decode next as soon as previous frame completes
+          this.pendingFrame = msg.frame;
         }
       }
     } catch {}

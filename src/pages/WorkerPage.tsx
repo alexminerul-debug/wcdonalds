@@ -79,7 +79,7 @@ export default function WorkerPage() {
     sendMessage({ type: 'purchase-ability', abilityId });
   };
 
-  const isDecisionDisabled = !currentTurn || currentTurn.phase === 'resolved' || currentTurn.phase === 'deciding';
+  const isDecisionDisabled = !currentTurn || currentTurn.phase === 'resolved';
   const hasUvScanner = workerState?.abilities.includes('uv-scanner') || false;
   const hasStabilizer = workerState?.abilities.includes('static-stabilizer') || false;
 

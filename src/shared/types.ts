@@ -52,6 +52,7 @@ export interface TurnState {
   queuePosition?: number;
   totalCustomers?: number;
   startedAt?: number;
+  paymentRequest?: { total: number; items: CartItem[] } | null;
 }
 
 export type TurnResult =
