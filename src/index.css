@@ -1,0 +1,227 @@
+@import "tailwindcss";
+
+/* ============================================
+   WcDonald's: The Anomaly — Custom Theme
+   ============================================ */
+
+@theme {
+  --color-blood: #8b0000;
+  --color-blood-bright: #dc143c;
+  --color-eerie: #00ff41;
+  --color-eerie-dim: #00aa2a;
+  --color-abyss: #0a0a0a;
+  --color-void: #111111;
+  --color-smoke: #1a1a1a;
+  --color-ash: #2a2a2a;
+  --color-fog: #3a3a3a;
+  --color-bone: #e0e0e0;
+  --color-phosphor: #39ff14;
+  --color-amber-glow: #ff6600;
+  --color-siren: #ff0040;
+  --color-safe: #00c853;
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+html, body, #root {
+  @apply bg-abyss text-bone min-h-screen;
+  font-family: 'Courier New', Courier, monospace;
+  overflow-x: hidden;
+}
+
+/* ============================================
+   Scanline Overlay Effect
+   ============================================ */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.scanline-overlay {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+}
+
+.scanline-moving {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: linear-gradient(
+    transparent 0%,
+    rgba(0, 255, 65, 0.03) 50%,
+    transparent 100%
+  );
+  height: 30%;
+  animation: scanline 8s linear infinite;
+}
+
+/* ============================================
+   VHS Glitch Effect
+   ============================================ */
+@keyframes vhs-glitch {
+  0%, 95%, 100% { clip-path: inset(0 0 0 0); transform: none; }
+  96% { clip-path: inset(20% 0 40% 0); transform: translateX(-4px); }
+  97% { clip-path: inset(60% 0 10% 0); transform: translateX(4px); }
+  98% { clip-path: inset(30% 0 30% 0); transform: translateX(-2px); }
+  99% { clip-path: inset(50% 0 20% 0); transform: translateX(2px); }
+}
+
+.vhs-glitch {
+  animation: vhs-glitch 4s infinite;
+}
+
+/* ============================================
+   Chromatic Aberration
+   ============================================ */
+.chromatic-aberration {
+  position: relative;
+}
+.chromatic-aberration::before,
+.chromatic-aberration::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.7;
+}
+.chromatic-aberration::before {
+  color: #ff0000;
+  transform: translate(-2px, 0);
+  mix-blend-mode: screen;
+}
+.chromatic-aberration::after {
+  color: #00ffff;
+  transform: translate(2px, 0);
+  mix-blend-mode: screen;
+}
+
+/* ============================================
+   Night Vision Filter
+   ============================================ */
+.night-vision {
+  filter: brightness(1.3) contrast(1.5) saturate(0) sepia(1) hue-rotate(80deg) saturate(4);
+  box-shadow: inset 0 0 80px rgba(0, 255, 65, 0.3);
+}
+
+.night-vision-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(0, 0, 0, 0.15) 1px,
+    rgba(0, 0, 0, 0.15) 2px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* ============================================
+   Glitch Text Effect
+   ============================================ */
+@keyframes glitch-text {
+  0%, 90%, 100% { transform: none; opacity: 1; }
+  91% { transform: skewX(20deg) translateX(4px); opacity: 0.8; }
+  92% { transform: skewX(-15deg) translateX(-4px); opacity: 0.9; }
+  93% { transform: skewX(10deg) translateX(2px); opacity: 0.7; }
+  94% { transform: none; opacity: 1; }
+}
+
+.glitch-text {
+  animation: glitch-text 3s infinite;
+}
+
+/* ============================================
+   REC Blink
+   ============================================ */
+@keyframes rec-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.rec-blink {
+  animation: rec-blink 1s ease-in-out infinite;
+}
+
+/* ============================================
+   Signal Lost
+   ============================================ */
+@keyframes signal-static {
+  0% { background-position: 0 0; }
+  100% { background-position: 100% 100%; }
+}
+
+.signal-lost {
+  background: repeating-conic-gradient(
+    #1a1a1a 0%, #333 2%, #0a0a0a 4%, #222 6%
+  );
+  background-size: 4px 4px;
+  animation: signal-static 0.1s infinite;
+}
+
+/* ============================================
+   Slide-to-Pay
+   ============================================ */
+@keyframes shimmer {
+  0% { transform: translateY(100%); opacity: 0; }
+  50% { opacity: 0.6; }
+  100% { transform: translateY(-100%); opacity: 0; }
+}
+
+.pay-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* ============================================
+   Jumpscare Flash
+   ============================================ */
+@keyframes jumpscare-flash {
+  0% { opacity: 0; background: white; }
+  10% { opacity: 1; background: white; }
+  30% { background: #dc143c; }
+  50% { background: #0a0a0a; }
+  70% { background: #dc143c; }
+  100% { opacity: 1; background: #0a0a0a; }
+}
+
+.jumpscare {
+  animation: jumpscare-flash 0.8s ease-out;
+}
+
+/* ============================================
+   Pulse Glow
+   ============================================ */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px currentColor; }
+  50% { box-shadow: 0 0 20px currentColor, 0 0 40px currentColor; }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ============================================
+   Siren Pulse
+   ============================================ */
+@keyframes siren-pulse {
+  0%, 100% { background-color: rgba(220, 20, 60, 0.1); }
+  50% { background-color: rgba(220, 20, 60, 0.4); }
+}
+
+.siren-bg {
+  animation: siren-pulse 0.5s ease-in-out infinite;
+}
