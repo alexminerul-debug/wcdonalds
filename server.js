@@ -779,8 +779,8 @@ const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  // Match /party/WCD-XXXX or /parties/main/WCD-XXXX
-  const match = url.pathname.match(/\/(?:party|parties\/main)\/([^/]+)/);
+  // Match /party/WCD-XXXX or /parties/<partyName>/WCD-XXXX or /parties/main/WCD-XXXX
+  const match = url.pathname.match(/\/(?:party|parties\/[^/]+)\/([^/]+)/);
   const roomCode = match ? match[1] : url.searchParams.get("room") || "WCD-ROOM";
   const connId = url.searchParams.get("_pk") || url.searchParams.get("id") || randomUUID();
 
@@ -797,6 +797,11 @@ wss.on("connection", (ws, req, roomCode, customConnId) => {
   }
 
   const connId = customConnId || randomUUID();
+  ws.isAlive = true;
+  ws.on("pong", () => {
+    ws.isAlive = true;
+  });
+
   room.addConnection(connId, ws);
 
   ws.on("close", () => {
@@ -809,6 +814,22 @@ wss.on("connection", (ws, req, roomCode, customConnId) => {
     }
   });
 });
+
+// Periodic heartbeat every 20s to prevent cloud proxies from dropping idle WebSockets
+const heartbeatInterval = setInterval(() => {
+  for (const room of rooms.values()) {
+    for (const [id, ws] of room.connections.entries()) {
+      if (ws.isAlive === false) {
+        try { ws.terminate(); } catch {}
+        room.removeConnection(id);
+      } else {
+        ws.isAlive = false;
+        try { ws.ping(); } catch {}
+      }
+    }
+  }
+}, 20000);
+heartbeatInterval.unref();
 
 server.listen(PORT, () => {
   console.log(`🍔 WcDonald's Game Server listening on port ${PORT}`);
