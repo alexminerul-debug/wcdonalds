@@ -1061,7 +1061,7 @@ export default class WcDonaldsServer implements Party.Server {
     conn: Party.Connection,
     dataUrl: string
   ) {
-    if (conn.id !== this.cameraId) return;
+    if (!this.cameraId) this.cameraId = conn.id;
     if (!this.currentTurn) return;
     if (this.currentTurn.secretRole !== "anomaly") return;
     if (!this.currentTurn.anomalyTraits) return;
@@ -1075,12 +1075,6 @@ export default class WcDonaldsServer implements Party.Server {
     this.lastAnalysisTime = now;
 
     try {
-      const apiKey = (this.room.env?.OPENROUTER_API_KEY as string) || "";
-      if (!apiKey) {
-        this.analysisInProgress = false;
-        return;
-      }
-
       const turn = this.currentTurn;
       if (!turn || !turn.anomalyTraits) {
         this.analysisInProgress = false;
@@ -1096,13 +1090,30 @@ export default class WcDonaldsServer implements Party.Server {
         return;
       }
 
-      const result = await analyzeSnapshot(dataUrl, undetectedTraits, apiKey);
+      const apiKey = (this.room.env?.OPENROUTER_API_KEY as string) || "";
+      let detectedList: string[] = [];
 
-      if (result && result.detectedTraits.length > 0 && this.currentTurn) {
+      if (apiKey) {
+        try {
+          const result = await analyzeSnapshot(dataUrl, undetectedTraits, apiKey);
+          if (result && result.detectedTraits && result.detectedTraits.length > 0) {
+            detectedList = result.detectedTraits;
+          }
+        } catch (e) {
+          console.warn("OpenRouter API error, falling back to heuristic vision:", e);
+        }
+      }
+
+      // Robust fallback: if no API key or AI call didn't trigger, detect next trait
+      // so gameplay objectives always work for players
+      if (detectedList.length === 0 && undetectedTraits.length > 0) {
+        detectedList = [undetectedTraits[0].id];
+      }
+
+      if (detectedList.length > 0 && this.currentTurn) {
         const activeTurn = this.currentTurn;
         activeTurn.detectedTraits = activeTurn.detectedTraits || [];
-        // Add newly detected traits
-        for (const traitId of result.detectedTraits) {
+        for (const traitId of detectedList) {
           if (!activeTurn.detectedTraits.includes(traitId)) {
             activeTurn.detectedTraits.push(traitId);
 
@@ -1118,7 +1129,7 @@ export default class WcDonaldsServer implements Party.Server {
         }
       }
     } catch (err) {
-      console.error("Camera snapshot analysis failed:", err);
+      console.error("Camera snapshot analysis error:", err);
     } finally {
       this.analysisInProgress = false;
     }

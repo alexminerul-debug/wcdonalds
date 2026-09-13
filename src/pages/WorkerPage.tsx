@@ -14,6 +14,7 @@ import { LeaveRoomButton } from '@/components/common/LeaveRoomButton';
 import { Heart, Moon, Skull } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useTranslation } from '@/lib/i18n';
+import { safeStorage } from '@/lib/storage';
 
 export default function WorkerPage() {
   const { code } = useParams<{ code: string }>();
@@ -33,10 +34,7 @@ export default function WorkerPage() {
   // Auto-register as Worker on mount / connect
   useEffect(() => {
     if (socket) {
-      const savedName =
-        (typeof window !== 'undefined' &&
-          sessionStorage.getItem('wcd_player_name')) ||
-        'Worker';
+      const savedName = safeStorage.getSession('wcd_player_name') || 'Worker';
       sendMessage({ type: 'join-room', name: savedName });
       sendMessage({ type: 'claim-role', role: 'worker' });
     }

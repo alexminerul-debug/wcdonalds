@@ -22,12 +22,14 @@ import { LanguageSelector } from "@/components/common/LanguageSelector";
 import { LeaveRoomButton } from "@/components/common/LeaveRoomButton";
 import { useTranslation } from "@/lib/i18n";
 
+import { safeStorage } from "@/lib/storage";
+
 export default function LobbyPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [playerName, setPlayerName] = useState(() => {
-    return (typeof window !== "undefined" && sessionStorage.getItem("wcd_player_name")) || "";
+    return safeStorage.getSession("wcd_player_name") || "";
   });
   const [hasJoined, setHasJoined] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -53,23 +55,17 @@ export default function LobbyPage() {
   const handleJoin = () => {
     const trimmed = playerName.trim();
     if (!trimmed) return;
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("wcd_player_name", trimmed);
-    }
+    safeStorage.setSession("wcd_player_name", trimmed);
     sendMessage({ type: "join-room", name: trimmed });
     // Default to customer role if joining
     const defaultRole: PlayerRole = isHost ? "worker" : "customer";
     sendMessage({ type: "claim-role", role: defaultRole });
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("wcd_player_role", defaultRole);
-    }
+    safeStorage.setSession("wcd_player_role", defaultRole);
     setHasJoined(true);
   };
 
   const handleClaimRole = (role: PlayerRole) => {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("wcd_player_role", role);
-    }
+    safeStorage.setSession("wcd_player_role", role);
     sendMessage({ type: "claim-role", role });
   };
 

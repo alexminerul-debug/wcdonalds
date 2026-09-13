@@ -177,9 +177,9 @@ export default function CameraPage() {
       streamerRef.current = streamer;
     } catch {}
 
-    // Start Canvas Fallback broadcaster (8 FPS with backpressure check)
+    // Start Canvas Fallback broadcaster (5 FPS lightweight stable CCTV stream)
     try {
-      const fallback = new CanvasSnapshotBroadcaster(videoRef.current, socket, 8);
+      const fallback = new CanvasSnapshotBroadcaster(videoRef.current, socket, 5);
       fallback.start();
       fallbackBroadcasterRef.current = fallback;
     } catch {}
@@ -218,12 +218,15 @@ export default function CameraPage() {
     };
   }, []);
 
-  // Update socket connections on broadcaster when socket changes WITHOUT killing media stream
+  // Update socket on broadcaster when socket updates WITHOUT destroying stream or interval
   useEffect(() => {
-    if (socket && streamRef.current && cameraReady) {
-      setupBroadcasters(streamRef.current);
+    if (socket && fallbackBroadcasterRef.current && cameraReady) {
+      fallbackBroadcasterRef.current.updateSocket(socket);
+      if (connectionStatus === "connected") {
+        sendMessage({ type: "camera-ready" });
+      }
     }
-  }, [socket, connectionStatus, cameraReady]);
+  }, [socket, connectionStatus, cameraReady, sendMessage]);
 
   // Join room and claim camera role on socket
   useEffect(() => {

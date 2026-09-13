@@ -4,12 +4,13 @@ import { getPartyKitHost } from '@/shared/constants';
 import { ClientMessage } from '@/shared/types';
 import type { PartySocket } from 'partysocket';
 
+import { safeStorage } from '@/lib/storage';
+
 export function getPersistentPlayerId(): string {
-  if (typeof window === 'undefined') return '';
-  let id = sessionStorage.getItem('wcd_player_id');
+  let id = safeStorage.getSession('wcd_player_id');
   if (!id) {
     id = 'p_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36).slice(-4);
-    sessionStorage.setItem('wcd_player_id', id);
+    safeStorage.setSession('wcd_player_id', id);
   }
   return id;
 }

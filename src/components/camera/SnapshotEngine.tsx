@@ -43,14 +43,19 @@ export function SnapshotEngine({
     if (!ctx) return;
 
     const captureFrame = () => {
-      if (videoElement.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (!videoElement || videoElement.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (!videoElement.videoWidth || !videoElement.videoHeight) return;
 
-      // Draw video frame to downscaled canvas
-      ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
+      try {
+        // Draw video frame to downscaled canvas
+        ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
 
-      // Convert to JPEG data URL
-      const dataUrl = canvas.toDataURL("image/jpeg", quality);
-      onSnapshot(dataUrl);
+        // Convert to JPEG data URL
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        onSnapshot(dataUrl);
+      } catch (err) {
+        console.warn("[SnapshotEngine] Frame capture skipped:", err);
+      }
     };
 
     intervalRef.current = window.setInterval(captureFrame, intervalMs);

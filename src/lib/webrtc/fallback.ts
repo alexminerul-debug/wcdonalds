@@ -20,6 +20,10 @@ export class CanvasSnapshotBroadcaster {
 
   private isProcessing = false;
 
+  public updateSocket(socket: PartySocket) {
+    this.socket = socket;
+  }
+
   public start() {
     if (this.intervalId) return;
     this.intervalId = window.setInterval(this.captureAndSend.bind(this), 1000 / this.fps);
@@ -27,21 +31,27 @@ export class CanvasSnapshotBroadcaster {
 
   private captureAndSend() {
     if (this.isProcessing) return;
+    
+    // Auto-resume if video was paused by browser
+    if (this.video.paused) {
+      this.video.play().catch(() => {});
+    }
+
     if (this.video.readyState < 2 || this.video.videoWidth === 0) return;
     if (this.socket.readyState !== WebSocket.OPEN) return;
 
-    // Check socket backpressure: skip frame if buffer is backlogged (> 64KB)
-    if (this.socket.bufferedAmount > 64 * 1024) {
+    // Check socket backpressure: skip frame if buffer is backlogged (> 32KB)
+    if (this.socket.bufferedAmount > 32 * 1024) {
       return;
     }
 
     this.isProcessing = true;
 
     try {
-      // Downscale to 420px width for efficient low-latency stream
-      const targetWidth = 420;
+      // 384x216 resolution: ultra-stable low memory footprint for mobile
+      const targetWidth = 384;
       const targetHeight =
-        Math.round((this.video.videoHeight / this.video.videoWidth) * targetWidth) || 240;
+        Math.round((this.video.videoHeight / this.video.videoWidth) * targetWidth) || 216;
 
       if (this.canvas.width !== targetWidth || this.canvas.height !== targetHeight) {
         this.canvas.width = targetWidth;
@@ -50,31 +60,11 @@ export class CanvasSnapshotBroadcaster {
 
       this.ctx?.drawImage(this.video, 0, 0, targetWidth, targetHeight);
 
-      // 1. Send base64 frame for universal web compatibility
-      const dataUrl = this.canvas.toDataURL("image/jpeg", 0.55);
+      // Single stream: efficient JPEG frame (quality 0.45)
+      const dataUrl = this.canvas.toDataURL("image/jpeg", 0.45);
       if (this.socket.readyState === WebSocket.OPEN) {
         this.socket.send(JSON.stringify({ type: "cctv-frame", frame: dataUrl }));
       }
-
-      // 2. Also send binary frame
-      const timestamp = Date.now();
-      this.canvas.toBlob(
-        (blob) => {
-          if (!blob || this.socket.readyState !== WebSocket.OPEN) return;
-          blob.arrayBuffer().then((buffer) => {
-            if (this.socket.bufferedAmount > 64 * 1024) return;
-            const payload = new Uint8Array(8 + buffer.byteLength);
-            const dataView = new DataView(payload.buffer);
-            dataView.setFloat64(0, timestamp, true);
-            payload.set(new Uint8Array(buffer), 8);
-            if (this.socket.readyState === WebSocket.OPEN) {
-              this.socket.send(payload);
-            }
-          });
-        },
-        "image/jpeg",
-        0.55
-      );
     } catch (err) {
       // Ignore frame encode errors
     } finally {

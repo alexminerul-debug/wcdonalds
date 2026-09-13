@@ -179,23 +179,21 @@ export const translations = {
   },
 };
 
+import { safeStorage } from "./storage";
+
 export type TranslationKey = keyof typeof translations.en;
 
 let currentLanguage: Language = "en";
 const listeners = new Set<(lang: Language) => void>();
 
-if (typeof window !== "undefined") {
-  const saved = localStorage.getItem(STORAGE_KEY) as Language | null;
-  if (saved && (saved === "en" || saved === "ro")) {
-    currentLanguage = saved;
-  }
+const saved = safeStorage.getItem(STORAGE_KEY) as Language | null;
+if (saved && (saved === "en" || saved === "ro")) {
+  currentLanguage = saved;
 }
 
 export function setLanguage(lang: Language) {
   currentLanguage = lang;
-  if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEY, lang);
-  }
+  safeStorage.setItem(STORAGE_KEY, lang);
   listeners.forEach((l) => l(lang));
 }
 

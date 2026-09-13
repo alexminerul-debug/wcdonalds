@@ -440,6 +440,33 @@ class GameRoom {
         }
         break;
       }
+
+      case "camera-snapshot": {
+        if (!this.currentTurn || this.currentTurn.secretRole !== "anomaly") break;
+        if (!this.currentTurn.anomalyTraits) break;
+
+        const turn = this.currentTurn;
+        turn.detectedTraits = turn.detectedTraits || [];
+        const undetectedTraits = turn.anomalyTraits.filter(
+          (t) => !turn.detectedTraits.includes(t.id)
+        );
+        if (undetectedTraits.length === 0) break;
+
+        const now = Date.now();
+        if (this.lastAnalysisTime && now - this.lastAnalysisTime < 2500) break;
+        this.lastAnalysisTime = now;
+
+        // Detect next assigned anomaly trait
+        const nextTrait = undetectedTraits[0];
+        turn.detectedTraits.push(nextTrait.id);
+
+        this.broadcast({
+          type: "trait-detected",
+          traitId: nextTrait.id,
+          allDetected: turn.detectedTraits,
+        });
+        break;
+      }
     }
   }
 

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { LogOut, AlertCircle } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
+import { safeStorage } from "@/lib/storage";
+
 interface LeaveRoomButtonProps {
   className?: string;
   roomCode?: string;
@@ -14,11 +16,9 @@ export function LeaveRoomButton({ className = "", roomCode }: LeaveRoomButtonPro
   const { t } = useTranslation();
 
   const handleLeave = () => {
-    try {
-      if (roomCode) {
-        sessionStorage.removeItem(`wcdonalds_player_${roomCode}`);
-      }
-    } catch {}
+    if (roomCode) {
+      safeStorage.removeSession(`wcdonalds_player_${roomCode}`);
+    }
     navigate("/");
   };
 

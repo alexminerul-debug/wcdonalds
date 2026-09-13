@@ -6,6 +6,7 @@ import { SoundEngine } from "@/lib/audio/soundEngine";
 import { vibrateTurnNotification, vibratePayment } from "@/lib/effects/haptics";
 import { MENU_ITEMS, SCORING } from "@/shared/constants";
 import { useTranslation } from "@/lib/i18n";
+import { safeStorage } from "@/lib/storage";
 
 import { QueueWaiting } from "@/components/customer/QueueWaiting";
 import { SecretRoleCard } from "@/components/customer/SecretRoleCard";
@@ -45,10 +46,7 @@ export default function CustomerPage() {
   // Ensure Customer registers identity and claims role on mount/reconnect
   useEffect(() => {
     if (connectionStatus === "connected") {
-      const savedName =
-        (typeof window !== "undefined" &&
-          sessionStorage.getItem("wcd_player_name")) ||
-        "Customer";
+      const savedName = safeStorage.getSession("wcd_player_name") || "Customer";
       sendMessage({ type: "join-room", name: savedName });
       sendMessage({ type: "claim-role", role: "customer" });
     }

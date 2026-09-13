@@ -70,19 +70,21 @@ export function generateRoomCode(): string {
   return `WCD-${num}`;
 }
 
+import { safeStorage } from "../lib/storage";
+
 // ============================================
 // PartyKit Connection Config
 // ============================================
 export function getPartyKitHost(): string {
   if (typeof window !== "undefined") {
-    const saved = localStorage.getItem("wcd_party_host");
+    const saved = safeStorage.getItem("wcd_party_host");
     if (saved) return saved;
 
     // Check query param e.g. ?server=xxx
     const params = new URLSearchParams(window.location.search);
     const serverParam = params.get("server");
     if (serverParam) {
-      localStorage.setItem("wcd_party_host", serverParam);
+      safeStorage.setItem("wcd_party_host", serverParam);
       return serverParam;
     }
 
@@ -102,9 +104,7 @@ export function getPartyKitHost(): string {
 }
 
 export function setPartyKitHost(host: string): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("wcd_party_host", host);
-  }
+  safeStorage.setItem("wcd_party_host", host);
 }
 
 export const PARTYKIT_HOST: string = getPartyKitHost();
