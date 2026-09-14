@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { CartItem, ClientMessage } from '@/shared/types';
+import type { CartItem, ClientMessage, MenuItem } from '@/shared/types';
 import { MENU_ITEMS } from '@/shared/constants';
 import { MenuGrid } from './MenuGrid';
 import { Cart } from './Cart';
@@ -12,6 +12,7 @@ interface POSRegisterProps {
   currentCustomerName: string | null;
   isPaymentPending: boolean;
   allowedItemIds?: string[] | null;
+  assignedOrder?: MenuItem[] | null;
 }
 
 export function POSRegister({
@@ -21,6 +22,7 @@ export function POSRegister({
   currentCustomerName,
   isPaymentPending,
   allowedItemIds,
+  assignedOrder,
 }: POSRegisterProps) {
   const { t } = useTranslation();
   const [localCart, setLocalCart] = useState<CartItem[]>(serverCartItems || []);
@@ -33,8 +35,14 @@ export function POSRegister({
   }, [serverCartItems]);
 
   const handleAddItem = (menuItemId: string) => {
-    // Enforce: worker can only put the correct items in an order
-    if (allowedItemIds && allowedItemIds.length > 0 && !allowedItemIds.includes(menuItemId)) {
+    // Enforce: worker cannot put more items than the actual order of the customer
+    if (assignedOrder && assignedOrder.length > 0) {
+      const allowedCount = assignedOrder.filter((i) => i.id === menuItemId).length;
+      const currentCount = localCart.find((c) => c.menuItem.id === menuItemId)?.quantity || 0;
+      if (currentCount >= allowedCount) {
+        return; // Already reached the exact amount ordered!
+      }
+    } else if (allowedItemIds && allowedItemIds.length > 0 && !allowedItemIds.includes(menuItemId)) {
       return;
     }
 
@@ -101,7 +109,12 @@ export function POSRegister({
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         <div className="flex-1 overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-smoke/30">
-          <MenuGrid onAddItem={handleAddItem} allowedItemIds={allowedItemIds} />
+          <MenuGrid
+            onAddItem={handleAddItem}
+            allowedItemIds={allowedItemIds}
+            assignedOrder={assignedOrder}
+            cartItems={localCart}
+          />
         </div>
         <div className="w-full md:w-80 h-64 md:h-full flex-shrink-0">
           <Cart 

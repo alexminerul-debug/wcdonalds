@@ -936,6 +936,15 @@ export default class WcDonaldsServer implements Party.Server {
     const menuItem = MENU_ITEMS.find((m) => m.id === menuItemId);
     if (!menuItem) return;
 
+    // Enforce: worker cannot put more items than the actual order of the customer
+    if (this.currentTurn && Array.isArray(this.currentTurn.assignedOrder) && this.currentTurn.assignedOrder.length > 0) {
+      const allowedCount = this.currentTurn.assignedOrder.filter((i) => i.id === menuItemId).length;
+      const currentCount = this.workerState.cart.find((c) => c.menuItem.id === menuItemId)?.quantity || 0;
+      if (currentCount >= allowedCount) {
+        return; // Don't allow more items than the actual order!
+      }
+    }
+
     const existing = this.workerState.cart.find(
       (c) => c.menuItem.id === menuItemId
     );
@@ -1281,12 +1290,17 @@ export default class WcDonaldsServer implements Party.Server {
     const customerId = this.currentTurn?.playerId;
     const traits = this.currentTurn?.anomalyTraits || (customerId ? this.secretTraits.get(customerId) : null) || null;
     const secretRole = (customerId ? this.secretRoles.get(customerId) : this.currentTurn?.secretRole) || "normal";
+    const customerName = this.currentTurn?.playerName || "Customer";
+    const assignedOrder = this.currentTurn?.assignedOrder || [];
 
     this.room.broadcast(
       JSON.stringify({
         type: "hack-customer-alert",
-        durationMs: 3000,
+        durationMs: 5000,
+        mirrorDurationMs: 3000,
         customerId: customerId || "",
+        customerName,
+        assignedOrder,
         traits,
         secretRole,
       } as ServerMessage)

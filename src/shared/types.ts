@@ -185,4 +185,13 @@ export type ServerMessage =
   | { type: "cctv-frame"; frame: string; ts?: number }
   | { type: "camera-ready" }
   | { type: "cctv-glitch"; effect: "static" | "blackout" | "distortion" | "scanline"; isAnomaly: boolean }
-  | { type: "hack-customer-alert"; durationMs: number; customerId: string; traits: AnomalyTrait[] | null; secretRole: SecretRole };
+  | { 
+      type: "hack-customer-alert"; 
+      durationMs: number; 
+      mirrorDurationMs?: number;
+      customerId: string; 
+      customerName?: string;
+      assignedOrder?: MenuItem[];
+      traits: AnomalyTrait[] | null; 
+      secretRole: SecretRole 
+    };

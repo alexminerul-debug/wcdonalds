@@ -387,6 +387,17 @@ class GameRoom {
       case "add-to-cart": {
         const item = MENU_ITEMS.find((m) => m.id === msg.menuItemId);
         if (!item) return;
+
+        // Enforce: worker cannot put more items than the actual order of the customer
+        if (this.currentTurn && Array.isArray(this.currentTurn.assignedOrder) && this.currentTurn.assignedOrder.length > 0) {
+          const allowedCount = this.currentTurn.assignedOrder.filter((i) => i.id === item.id).length;
+          const currentCount = this.workerState.cart.find((c) => c.menuItem.id === item.id)?.quantity || 0;
+          if (currentCount >= allowedCount) {
+            // Cannot add more of this item than ordered
+            return;
+          }
+        }
+
         const existing = this.workerState.cart.find((c) => c.menuItem.id === item.id);
         if (existing) existing.quantity++;
         else this.workerState.cart.push({ menuItem: item, quantity: 1 });
@@ -728,11 +739,16 @@ class GameRoom {
     const customerId = this.currentTurn?.playerId;
     const traits = this.currentTurn?.anomalyTraits || (customerId ? this.secretTraits.get(customerId) : null) || null;
     const secretRole = (customerId ? this.secretRoles.get(customerId) : this.currentTurn?.secretRole) || "normal";
+    const customerName = this.currentTurn?.playerName || "Customer";
+    const assignedOrder = this.currentTurn?.assignedOrder || [];
 
     this.broadcast({
       type: "hack-customer-alert",
-      durationMs: 3000,
+      durationMs: 5000,
+      mirrorDurationMs: 3000,
       customerId: customerId || "",
+      customerName,
+      assignedOrder,
       traits,
       secretRole,
     });

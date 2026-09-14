@@ -48,7 +48,15 @@ export function useGameState(socket: PartySocket | null) {
   const [lastResult, setLastResult] = useState<TurnResult | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cctvGlitch, setCctvGlitch] = useState<{ effect: "static" | "blackout" | "distortion"; isAnomaly: boolean } | null>(null);
-  const [hackAlert, setHackAlert] = useState<{ durationMs: number; customerId: string; traits: AnomalyTrait[] | null; secretRole: SecretRole } | null>(null);
+  const [hackAlert, setHackAlert] = useState<{
+    durationMs: number;
+    mirrorDurationMs?: number;
+    customerId: string;
+    customerName?: string;
+    assignedOrder?: MenuItem[];
+    traits: AnomalyTrait[] | null;
+    secretRole: SecretRole;
+  } | null>(null);
 
   // Use refs so the message handler can access the latest values
   // without needing to be recreated (which was the root of the payment bug)
@@ -196,13 +204,16 @@ export function useGameState(socket: PartySocket | null) {
           case 'hack-customer-alert':
             setHackAlert({
               durationMs: msg.durationMs,
+              mirrorDurationMs: msg.mirrorDurationMs,
               customerId: msg.customerId,
+              customerName: msg.customerName,
+              assignedOrder: msg.assignedOrder,
               traits: msg.traits,
               secretRole: msg.secretRole,
             });
             setTimeout(() => {
               setHackAlert(null);
-            }, (msg.durationMs || 3000) + 1000);
+            }, (msg.durationMs || 5000) + 1000);
             break;
             
           case 'cctv-glitch':

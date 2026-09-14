@@ -165,7 +165,7 @@ export default function WorkerPage() {
 
     if (abilityId === 'hack-customer') {
       try {
-        SoundEngine.getInstance().playJumpscare();
+        SoundEngine.getInstance().playTerminalHacking();
       } catch {}
       setShowHackModal(true);
     }
@@ -200,9 +200,12 @@ export default function WorkerPage() {
       {/* Hack Customer Terminal Mirror Modal */}
       {showHackModal && (
         <WorkerHackTerminalModal
-          durationMs={hackAlert?.durationMs || 3000}
-          traits={hackAlert?.traits || null}
-          secretRole={hackAlert?.secretRole || "normal"}
+          durationMs={hackAlert?.durationMs || 5000}
+          mirrorDurationMs={hackAlert?.mirrorDurationMs || 3000}
+          customerName={hackAlert?.customerName || currentTurn?.playerName || "Customer"}
+          assignedOrder={hackAlert?.assignedOrder || currentTurn?.assignedOrder || []}
+          traits={hackAlert?.traits || currentTurn?.anomalyTraits || null}
+          secretRole={hackAlert?.secretRole || currentTurn?.secretRole || "normal"}
           onDismiss={() => setShowHackModal(false)}
         />
       )}
@@ -297,6 +300,7 @@ export default function WorkerPage() {
                   currentCustomerName={currentTurn?.playerName || null}
                   isPaymentPending={currentTurn?.phase === 'payment'}
                   allowedItemIds={currentTurn?.assignedOrder ? currentTurn.assignedOrder.map(i => i.id) : null}
+                  assignedOrder={currentTurn?.assignedOrder || null}
                 />
              )}
           </div>

@@ -443,7 +443,7 @@ export default function CustomerPage() {
     <>
       {isHacked && (
         <CustomerHackOverlay
-          durationMs={hackAlert?.durationMs || 3000}
+          durationMs={hackAlert?.durationMs || 5000}
           onDismiss={() => setIsHacked(false)}
         />
       )}
