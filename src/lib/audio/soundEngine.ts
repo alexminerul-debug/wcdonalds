@@ -263,6 +263,132 @@ export class SoundEngine {
     });
   }
 
+  // Deep bass thump → rising tone that plateaus = "connection locked in"
+  public playBreachEstablished() {
+    if (!this.context || !this.masterGain) return;
+    this.resume();
+    const now = this.context.currentTime;
+
+    // Impact thump
+    const thumpOsc = this.context.createOscillator();
+    const thumpGain = this.context.createGain();
+    thumpOsc.type = 'sine';
+    thumpOsc.frequency.setValueAtTime(60, now);
+    thumpOsc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+    thumpGain.gain.setValueAtTime(0, now);
+    thumpGain.gain.linearRampToValueAtTime(0.8, now + 0.02);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    thumpOsc.connect(thumpGain);
+    thumpGain.connect(this.masterGain);
+    thumpOsc.start(now);
+    thumpOsc.stop(now + 0.5);
+
+    // Rising confirmation tone
+    const riseOsc = this.context.createOscillator();
+    const riseGain = this.context.createGain();
+    riseOsc.type = 'triangle';
+    riseOsc.frequency.setValueAtTime(200, now + 0.1);
+    riseOsc.frequency.exponentialRampToValueAtTime(600, now + 0.5);
+    riseOsc.frequency.setValueAtTime(600, now + 0.5);
+    riseGain.gain.setValueAtTime(0, now + 0.1);
+    riseGain.gain.linearRampToValueAtTime(0.3, now + 0.3);
+    riseGain.gain.setValueAtTime(0.3, now + 0.6);
+    riseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+    riseOsc.connect(riseGain);
+    riseGain.connect(this.masterGain);
+    riseOsc.start(now + 0.1);
+    riseOsc.stop(now + 1.0);
+
+    // Subtle high harmonic ping
+    const pingOsc = this.context.createOscillator();
+    const pingGain = this.context.createGain();
+    pingOsc.type = 'sine';
+    pingOsc.frequency.setValueAtTime(1200, now + 0.4);
+    pingGain.gain.setValueAtTime(0, now + 0.4);
+    pingGain.gain.linearRampToValueAtTime(0.15, now + 0.42);
+    pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    pingOsc.connect(pingGain);
+    pingGain.connect(this.masterGain);
+    pingOsc.start(now + 0.4);
+    pingOsc.stop(now + 0.8);
+  }
+
+  // Rapid high-frequency beeping/clicking like modem data transfer
+  public playDataStream() {
+    if (!this.context || !this.masterGain) return;
+    this.resume();
+    const now = this.context.currentTime;
+
+    for (let i = 0; i < 16; i++) {
+      const t = now + i * 0.05;
+      const osc = this.context.createOscillator();
+      const gain = this.context.createGain();
+      osc.type = i % 3 === 0 ? 'square' : 'sawtooth';
+      const freq = 800 + Math.random() * 3000;
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(t);
+      osc.stop(t + 0.04);
+    }
+  }
+
+  // Sharper screen crack: low-freq impact hit then glass shards
+  public playScreenCrack() {
+    if (!this.context || !this.masterGain) return;
+    this.resume();
+    const now = this.context.currentTime;
+
+    // Heavy impact
+    const impactOsc = this.context.createOscillator();
+    const impactGain = this.context.createGain();
+    impactOsc.type = 'square';
+    impactOsc.frequency.setValueAtTime(50, now);
+    impactOsc.frequency.exponentialRampToValueAtTime(25, now + 0.15);
+    impactGain.gain.setValueAtTime(0, now);
+    impactGain.gain.linearRampToValueAtTime(1, now + 0.01);
+    impactGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    impactOsc.connect(impactGain);
+    impactGain.connect(this.masterGain);
+    impactOsc.start(now);
+    impactOsc.stop(now + 0.2);
+
+    // Cracking noise burst
+    const bufSize = Math.floor(this.context.sampleRate * 0.6);
+    const buf = this.context.createBuffer(1, bufSize, this.context.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.context.sampleRate * 0.08));
+    }
+    const noiseNode = this.context.createBufferSource();
+    noiseNode.buffer = buf;
+    const nGain = this.context.createGain();
+    nGain.gain.setValueAtTime(0.9, now + 0.02);
+    nGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    noiseNode.connect(nGain);
+    nGain.connect(this.masterGain);
+    noiseNode.start(now + 0.02);
+
+    // Crystal shards with more variety
+    [1800, 2600, 3400, 4800, 6200].forEach((freq, idx) => {
+      if (!this.context || !this.masterGain) return;
+      const shard = this.context.createOscillator();
+      const sGain = this.context.createGain();
+      shard.type = 'triangle';
+      shard.frequency.setValueAtTime(freq + Math.random() * 500, now + 0.03 + idx * 0.03);
+      sGain.gain.setValueAtTime(0.15, now + 0.03 + idx * 0.03);
+      sGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      shard.connect(sGain);
+      sGain.connect(this.masterGain);
+      shard.start(now + 0.03 + idx * 0.03);
+      shard.stop(now + 0.4);
+    });
+  }
+
   public playPuzzleSuccess() {
     if (!this.context || !this.masterGain) return;
     this.resume();

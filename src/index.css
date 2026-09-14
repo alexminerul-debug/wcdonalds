@@ -225,3 +225,172 @@ html, body, #root {
 .siren-bg {
   animation: siren-pulse 0.5s ease-in-out infinite;
 }
+
+/* ============================================
+   Fade In (was missing — used by 7+ components)
+   ============================================ */
+@keyframes fade-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+/* ============================================
+   Zoom In (modal entrance)
+   ============================================ */
+@keyframes zoom-in {
+  0% { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-zoom-in {
+  animation: zoom-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ============================================
+   Slide Up (staggered list reveals)
+   ============================================ */
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out both;
+}
+
+/* ============================================
+   Hack: Screen Shake
+   ============================================ */
+@keyframes hack-screen-shake {
+  0%, 100% { transform: translate(0); }
+  10% { transform: translate(-8px, 4px); }
+  20% { transform: translate(6px, -6px); }
+  30% { transform: translate(-4px, 8px); }
+  40% { transform: translate(8px, -2px); }
+  50% { transform: translate(-6px, -4px); }
+  60% { transform: translate(4px, 6px); }
+  70% { transform: translate(-2px, -8px); }
+  80% { transform: translate(6px, 2px); }
+  90% { transform: translate(-4px, 4px); }
+}
+
+.hack-shake {
+  animation: hack-screen-shake 0.4s ease-in-out;
+}
+
+/* ============================================
+   Hack: Scandown Sweep
+   ============================================ */
+@keyframes hack-scandown {
+  0% { top: -10%; opacity: 1; }
+  100% { top: 110%; opacity: 0.3; }
+}
+
+.hack-scandown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #00ff41, #00ff41, transparent);
+  box-shadow: 0 0 20px #00ff41, 0 0 60px #00ff41;
+  animation: hack-scandown 0.8s ease-in both;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* ============================================
+   Hack: Crack Spread
+   ============================================ */
+@keyframes crack-spread {
+  0% { transform: scale(0); opacity: 0; }
+  30% { transform: scale(0.3); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.9; }
+}
+
+.crack-spread {
+  animation: crack-spread 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ============================================
+   Hack: Terminal Type Cursor
+   ============================================ */
+@keyframes terminal-cursor {
+  0%, 100% { border-color: #00ff41; }
+  50% { border-color: transparent; }
+}
+
+.terminal-cursor::after {
+  content: '█';
+  color: #00ff41;
+  animation: terminal-cursor 0.6s step-end infinite;
+  margin-left: 2px;
+}
+
+/* ============================================
+   Hack: Data Stream (binary rain)
+   ============================================ */
+@keyframes data-rain {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.data-rain-col {
+  animation: data-rain var(--rain-duration, 2s) linear infinite;
+  animation-delay: var(--rain-delay, 0s);
+}
+
+/* ============================================
+   Hack: Breach Pulse (red emergency)
+   ============================================ */
+@keyframes breach-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(220, 20, 60, 0.3), inset 0 0 10px rgba(220, 20, 60, 0.1); }
+  50% { box-shadow: 0 0 30px rgba(220, 20, 60, 0.8), 0 0 60px rgba(220, 20, 60, 0.4), inset 0 0 20px rgba(220, 20, 60, 0.2); }
+}
+
+.breach-pulse {
+  animation: breach-pulse 0.6s ease-in-out infinite;
+}
+
+/* ============================================
+   Hack: Progress Bar Fill
+   ============================================ */
+@keyframes progress-fill {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+.hack-progress-fill {
+  animation: progress-fill var(--fill-duration, 1.2s) ease-out both;
+}
+
+/* ============================================
+   Hack: Neon Glow Text
+   ============================================ */
+.neon-green {
+  color: #00ff41;
+  text-shadow: 0 0 7px #00ff41, 0 0 20px #00ff41, 0 0 42px #00aa2a;
+}
+
+.neon-red {
+  color: #ff0040;
+  text-shadow: 0 0 7px #ff0040, 0 0 20px #ff0040, 0 0 42px #8b0000;
+}
+
+/* ============================================
+   Custom Scrollbar
+   ============================================ */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #111;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+
